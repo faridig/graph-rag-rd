@@ -1,0 +1,25 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: requires running Docker (Neo4j)",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    # Standalone scripts requiring live Neo4j — not unit-testable
+    "src/ingest/calibrate_threshold.py",
+    "src/ingest/create_indexes.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "if __name__ == .__main__.",
+]
