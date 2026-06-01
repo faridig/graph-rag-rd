@@ -10,7 +10,7 @@ Full spec: `docs/spec/SPEC.md`
 
 ---
 
-## État d'avancement (2026-05-29)
+## État d'avancement (2026-06-01)
 
 | Tâche | Fichier | Statut |
 |-------|---------|--------|
@@ -23,8 +23,8 @@ Full spec: `docs/spec/SPEC.md`
 | T8 | `src/generation/prompt_fr.py`, `src/generation/rag_pipeline.py` | ✓ |
 | T8.bis | `src/ingest/calibrate_threshold.py` | ✓ |
 | T9 | `src/api.py` — FastAPI `POST /query`, `GET /health`, `GET /corpus` | ✓ |
-| T10 | `src/query.py` — CLI `python src/query.py "<question>"` | ✓ |
-| T11–T13 | `tests/` — 55 tests (test_rag, test_api, test_query_cli, test_retrieval, test_ingest) | ✓ |
+| T10 | `src/query.py` — CLI `python -m src.query "<question>"` | ✓ |
+| T11–T13 | `tests/` — 63 tests (test_rag, test_api, test_query_cli, test_retrieval, test_ingest) | ✓ |
 
 ---
 
@@ -35,7 +35,8 @@ Full spec: `docs/spec/SPEC.md`
 | `src/config.py` | Constantes et variables d'env (SCORE_THRESHOLD, CORPUS_SCOPE, clés API) |
 | `src/models.py` | Dataclasses Pydantic : `QueryRequest`, `QueryResponse`, `Source` |
 | `src/api.py` | FastAPI : `POST /query`, `GET /health`, `GET /corpus` — point d'entrée HTTP |
-| `src/query.py` | CLI : `python src/query.py "<question>"` — point d'entrée terminal |
+| `src/query.py` | CLI : `python -m src.query "<question>"` — point d'entrée terminal |
+| `src/app.py` | Application Gradio (interface web locale) |
 | `src/generation/rag_pipeline.py` | Orchestration RAG : `run_query()`, `build_pipeline()`, `get_dense_score()` |
 | `src/generation/prompt_fr.py` | Template de prompt système (français) |
 | `src/retrieval/base.py` | Interface `IRetriever` |
@@ -71,12 +72,12 @@ docker compose up -d
 pip install -r requirements.txt
 
 # Ingestion (in order)
-python src/ingest/import_neo4j.py    # JSON knowledge → Neo4j (idempotent)
-python src/ingest/create_indexes.py  # fulltext + vector indexes
-python src/ingest/embed_chunks.py    # chunks + embeddings → Neo4j vector index
+python -m src.ingest.import_neo4j    # JSON knowledge → Neo4j (idempotent)
+python -m src.ingest.create_indexes  # fulltext + vector indexes
+python -m src.ingest.embed_chunks    # chunks + embeddings → Neo4j vector index
 
 # Query CLI
-python src/query.py "Quel effet a l'huile sur M03 ?"
+python -m src.query "Quel effet a l'huile sur M03 ?"
 
 # API
 uvicorn src.api:app --reload --port 8000
@@ -117,10 +118,10 @@ ruff format src/ tests/
 (Run)-[:DETAILS]->(Experiment)   # REPERTOIRE Run → Experiment détaillé (ACE-3, ACE-5…)
 ```
 
-**[:DETAILS] — construction programmatique (après LOAD CSV des 3 sources) :**
+**[:DETAILS] — construction programmatique :**
 Extraire le segment après `:Run:` dans l'id du run REPERTOIRE → matcher sur `Experiment.id`.
-Confirmé par le champ `note` "Lien vers fiche détaillée: ACE-3-…" dans le CSV REPERTOIRE.
-Ce lien est obligatoire pour naviguer depuis les résumés REPERTOIRE vers les données ACE complètes.
+Seuls 2 edges existent : ACE-3 et ACE-5 (les seuls experiments dont l'ID correspond à un run RÉPERTOIRE).
+Allumette, ESC-QUICK, Kobé n'ont PAS de edge [:DETAILS] — leurs runs RÉPERTOIRE référencent le fichier xlsx mais avec des IDs différents de l'experiment_id.
 
 **Vector index:** `chunk_embedding` — 1536 dims, cosine, on `Chunk.embedding`
 
@@ -158,7 +159,7 @@ Ce lien est obligatoire pour naviguer depuis les résumés REPERTOIRE vers les d
 **Fallback gate** : si `dense_score` absolu du top-1 < `SCORE_THRESHOLD` → `exact_lookup.py` (Cypher `CONTAINS toLower()`). Pas de routing conditionnel.
 
 **Filtre chantier** : deux branches — avec filtre : MATCH sur chantier + dense rank exact ; sans filtre : hybrid normal.
-**Pas de re-ranking** (corpus ~320 chunks — inutile à cette taille).
+**Pas de re-ranking** (corpus ~382 chunks — inutile à cette taille).
 **IRetriever interface** préservée pour migration future vers un store externe.
 
 ---
@@ -199,13 +200,14 @@ Critical test: absent ingredient must return `FALLBACK_MESSAGE` exactly, `source
 
 ## Corpus (MVP scope)
 
-| Source | Runs | Detail level |
-|--------|------|-------------|
-| REPERTOIRE-RD-2025-2026 | 316 | Summary (objective, synthesis, status) |
-| ACE-3 | 1 experiment | Full detail |
-| ACE-5 | 1 experiment | Full detail |
-| Allumette | 1 experiment | Full detail |
-| ESC-QUICK (Escalope panée Quick) | 1 experiment — 64 runs, 60 chunks | Full detail |
+| Source | Runs | Chunks | Detail level |
+|--------|------|--------|-------------|
+| REPERTOIRE-RD-2025-2026 | 316 | 313 | Summary (objective, synthesis, status) |
+| ACE-3 | 7 | 7 | Full detail — extrusion P02 NaCl/KCl |
+| ACE-5 | 11 | 11 | Full detail — impact huile M03 |
+| Allumette | 3 | 3 | Full detail — impact sel HME |
+| ESC-QUICK (Escalope panée Quick) | 64 | 60 | Full detail — formulation pané végétal Quick |
+| **Total Neo4j** | **389** | **382** | |
 
 `_knowledge.json` → source primaire Neo4j (import + structure)
 `_documentation.md` → source de chunking pour Neo4j vector index
