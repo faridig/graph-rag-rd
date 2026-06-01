@@ -35,8 +35,15 @@ _DOC_PATHS: list[tuple[Path, str]] = [
         "ACE-5",
     ),
     (
-        Path("data/repertoire_rd_2025-2026/lien_essai/Essai Allumette-5/Allumette_documentation.md"),
+        Path(
+            "data/repertoire_rd_2025-2026/lien_essai/Essai Allumette-5/Allumette_documentation.md"
+        ),
         "Allumette",
+    ),
+    (
+        Path("data/repertoire_rd_2025-2026/lien_essai")
+        / "Escalope panée Quick/ESC-QUICK_documentation.md",
+        "ESC-QUICK",
     ),
 ]
 
@@ -81,7 +88,7 @@ def _extract_field(section: str, field: str) -> str | None:
 
 
 def _chunk_run_detail(content: str, source_file: str, experiment_id: str) -> list[dict]:
-    parts = re.split(r"### Run (\d+) —[^\n]*\n", content)
+    parts = re.split(r"### Run ([\w-]+) —[^\n]*\n", content)
     chunks: list[dict] = []
     for i in range(1, len(parts), 2):
         local_id = parts[i].strip()
@@ -162,7 +169,7 @@ def chunk_documentation(path: Path, source_type: str) -> list[dict]:
                 }
             )
 
-    elif source_type in ("ACE-5", "Allumette"):
+    elif source_type in ("ACE-5", "Allumette", "ESC-QUICK"):
         chunks.extend(_chunk_run_detail(content, source_file, source_type))
 
     else:

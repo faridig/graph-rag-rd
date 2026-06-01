@@ -204,6 +204,8 @@ Critical test: absent ingredient must return `FALLBACK_MESSAGE` exactly, `source
 | REPERTOIRE-RD-2025-2026 | 316 | Summary (objective, synthesis, status) |
 | ACE-3 | 1 experiment | Full detail |
 | ACE-5 | 1 experiment | Full detail |
+| Allumette | 1 experiment | Full detail |
+| ESC-QUICK (Escalope panée Quick) | 1 experiment — 64 runs, 60 chunks | Full detail |
 
 `_knowledge.json` → source primaire Neo4j (import + structure)
 `_documentation.md` → source de chunking pour Neo4j vector index

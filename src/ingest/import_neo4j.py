@@ -22,6 +22,7 @@ _DATA_PATHS: list[Path] = [
     Path("data/repertoire_rd_2025-2026/lien_essai/ACE-3/ACE-3_knowledge.json"),
     Path("data/repertoire_rd_2025-2026/lien_essai/ACE-5/ACE-5_knowledge.json"),
     Path("data/repertoire_rd_2025-2026/lien_essai/Essai Allumette-5/Allumette_knowledge.json"),
+    Path("data/repertoire_rd_2025-2026/lien_essai/Escalope panée Quick/ESC-QUICK_knowledge.json"),
 ]
 
 
@@ -168,7 +169,10 @@ def _parse_runs_with_formulation(data: dict, exp_id: str, formulation_key: str) 
 
 def _parse_ace5(path: Path, data: dict) -> dict:
     experiment = _parse_experiment_header(path, data["experiment"])
-    return {"experiment": experiment, "runs": _parse_runs_with_formulation(data, experiment["id"], "formulation")}
+    return {
+        "experiment": experiment,
+        "runs": _parse_runs_with_formulation(data, experiment["id"], "formulation"),
+    }
 
 
 def parse_knowledge_json(path: Path) -> dict:
@@ -186,7 +190,10 @@ def parse_knowledge_json(path: Path) -> dict:
         if runs_raw and "formulation_HME" in runs_raw[0].get("inputs", {})
         else "formulation"
     )
-    return {"experiment": experiment, "runs": _parse_runs_with_formulation(data, experiment["id"], formulation_key)}
+    return {
+        "experiment": experiment,
+        "runs": _parse_runs_with_formulation(data, experiment["id"], formulation_key),
+    }
 
 
 def import_source(driver: Driver, data: dict) -> dict:
@@ -256,9 +263,7 @@ def import_source(driver: Driver, data: dict) -> dict:
             counts["runs"] += result.single()["cnt"]
 
         chantier_pairs = [
-            {"run_id": r["id"], "chantier": r["chantier"]}
-            for r in runs
-            if r.get("chantier")
+            {"run_id": r["id"], "chantier": r["chantier"]} for r in runs if r.get("chantier")
         ]
         for i in range(0, len(chantier_pairs), 500):
             result = session.run(
@@ -273,11 +278,7 @@ def import_source(driver: Driver, data: dict) -> dict:
             )
             counts["chantiers"] += result.single()["cnt"]
 
-        lead_pairs = [
-            {"run_id": r["id"], "lead": r["lead"]}
-            for r in runs
-            if r.get("lead")
-        ]
+        lead_pairs = [{"run_id": r["id"], "lead": r["lead"]} for r in runs if r.get("lead")]
         for i in range(0, len(lead_pairs), 500):
             result = session.run(
                 """
@@ -366,11 +367,9 @@ def main() -> None:
 
         with driver.session() as session:
             run_count = session.run("MATCH (r:Run) RETURN count(r) AS cnt").single()["cnt"]
-            det_count = (
-                session.run(
-                    "MATCH (:Run)-[:DETAILS]->(:Experiment) RETURN count(*) AS cnt"
-                ).single()["cnt"]
-            )
+            det_count = session.run(
+                "MATCH (:Run)-[:DETAILS]->(:Experiment) RETURN count(*) AS cnt"
+            ).single()["cnt"]
             logger.info("Validation: %d runs, %d [:DETAILS]", run_count, det_count)
     finally:
         driver.close()
