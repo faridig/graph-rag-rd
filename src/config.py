@@ -22,5 +22,5 @@ CORPUS_SCOPE: list[str] = []
 FALLBACK_MESSAGE: str = "Information absente du corpus actuel."
 
 # Calibré empiriquement (calibrate_threshold.py) :
-# présentes min=0.7097/max=0.8393 | absentes min=0.6458/max=0.7504
-SCORE_THRESHOLD: float = 0.6997
+# présentes min=0.6798/max=0.8283 | absentes min=0.6475/max=0.7507
+SCORE_THRESHOLD: float = 0.6698
