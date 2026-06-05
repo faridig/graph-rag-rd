@@ -12,7 +12,6 @@ from openai import OpenAI
 
 from src.config import (
     ANTHROPIC_API_KEY,
-    CORPUS_SCOPE,
     NEO4J_PASSWORD,
     NEO4J_URI,
     NEO4J_USER,
@@ -61,13 +60,12 @@ def health() -> dict[str, str]:
 
 @app.get("/corpus")
 def corpus() -> dict[str, Any]:
-    _COUNT_CYPHER = """
-    MATCH (e:Experiment {id: $exp_id})-[:HAS_RUN]->(r:Run)
-    RETURN count(r) AS run_count
+    _CYPHER = """
+    MATCH (e:Experiment)-[:HAS_RUN]->(r:Run)
+    RETURN e.id AS id, count(r) AS run_count
+    ORDER BY e.id
     """
-    counts: dict[str, int] = {}
     with _state["driver"].session() as session:
-        for source in CORPUS_SCOPE:
-            record = session.run(_COUNT_CYPHER, exp_id=source).single()
-            counts[source] = int(record["run_count"]) if record else 0
-    return {"sources": [{"id": s, "run_count": counts[s]} for s in CORPUS_SCOPE]}
+        records = session.run(_CYPHER)
+        sources = [{"id": r["id"], "run_count": int(r["run_count"])} for r in records]
+    return {"sources": sources}
