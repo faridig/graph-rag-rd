@@ -30,6 +30,15 @@ _PRESENT = [
     "amélioration jutosité steak",
     "sourcing gluten alternatives",
     "boulette poulet arôme",
+    # Formulations longues (style utilisateur réel)
+    "Quel est l'effet de l'huile sur la dureté et l'anisotropie dans l'essai M03 ?",
+    "NaCl et KCl ont-ils le même effet sur la texturation de P02 ?",
+    "quel impact du sel sur les bandes texturées Allumette HME",
+    "formulations escalope panée Quick coût matière première",
+    "quelles formulations ont atteint l'objectif coût inférieur à 2 euros par kg Quick",
+    "impact teneur sel absorption eau extrusion HME",
+    "SME pression filière huile M03 extrusion",
+    "anisotropie coupe transversale longitudinale P02",
 ]
 
 _ABSENT = [
@@ -40,6 +49,8 @@ _ABSENT = [
     "polyester textile synthétique",
     "enzyme transglutaminase",
     "fermentation protéine",
+    "acide citrique stabilisant pH",
+    "lyophilisation protéine végétale",
 ]
 
 _TOP1_CYPHER = """
@@ -81,14 +92,24 @@ def main() -> None:
         max_present = max(present_scores)
         min_absent = min(absent_scores)
         max_absent = max(absent_scores)
-        suggested = round((min_present + max_absent) / 2, 4)
+        # When distributions overlap, midpoint can fall above min_present (false negatives).
+        # Use min_present - 0.01 to guarantee all present queries pass the gate.
+        midpoint = round((min_present + max_absent) / 2, 4)
+        if max_absent >= min_present:
+            suggested = round(min_present - 0.01, 4)
+        else:
+            suggested = midpoint
 
         print(f"\nDistribution présentes : min={min_present:.4f}  max={max_present:.4f}")
         print(f"Distribution absentes  : min={min_absent:.4f}  max={max_absent:.4f}")
-        print(f"Seuil suggéré          : {suggested:.4f}  (midpoint du creux)")
+        print(f"Midpoint du creux      : {midpoint:.4f}")
+        print(f"Seuil suggéré          : {suggested:.4f}")
 
         if max_absent >= min_present:
-            print("⚠️  Distributions se chevauchent — seuil peu fiable, revoir les requêtes.")
+            print(
+                "⚠️  Distributions se chevauchent — seuil fixé à min_present - 0.01"
+                " pour garantir zéro faux négatif. Ajouter des chunks summary améliorerait la séparation."
+            )
 
         _update_config(suggested, min_present, max_present, min_absent, max_absent)
 

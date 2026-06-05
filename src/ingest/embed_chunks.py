@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
+import json
 import logging
 import re
 from pathlib import Path
@@ -21,31 +23,44 @@ from src.config import (
 
 logger = logging.getLogger(__name__)
 
-_DOC_PATHS: list[tuple[Path, str]] = [
-    (
-        Path("data/repertoire_rd_2025-2026/REPERTOIRE-RD-2025-2026_documentation.md"),
-        "REPERTOIRE",
-    ),
-    (
-        Path("data/repertoire_rd_2025-2026/lien_essai/ACE-3/ACE-3_documentation.md"),
-        "ACE-3",
-    ),
-    (
-        Path("data/repertoire_rd_2025-2026/lien_essai/ACE-5/ACE-5_documentation.md"),
-        "ACE-5",
-    ),
-    (
-        Path(
-            "data/repertoire_rd_2025-2026/lien_essai/Essai Allumette-5/Allumette_documentation.md"
-        ),
-        "Allumette",
-    ),
-    (
-        Path("data/repertoire_rd_2025-2026/lien_essai")
-        / "Escalope panée Quick/ESC-QUICK_documentation.md",
-        "ESC-QUICK",
-    ),
-]
+_LIEN_ESSAI_DIR = Path("data/repertoire_rd_2025-2026/lien_essai")
+_REPERTOIRE_DOC = Path("data/repertoire_rd_2025-2026/REPERTOIRE-RD-2025-2026_documentation.md")
+
+
+def _discover_doc_paths() -> list[tuple[Path, str]]:
+    """Return (doc_path, experiment_id) for REPERTOIRE + all auto-discovered lien_essai docs.
+
+    experiment_id is derived from filename: ``FOO_documentation.md`` → ``FOO``.
+    Special routing keys REPERTOIRE and ACE-3 are preserved by their fixed IDs.
+    Every other experiment uses the generic _chunk_run_detail() path.
+    """
+    paths: list[tuple[Path, str]] = [(_REPERTOIRE_DOC, "REPERTOIRE")]
+    for doc_path in sorted(_LIEN_ESSAI_DIR.glob("**/*_documentation.md")):
+        exp_id = _exp_id_for_doc(doc_path)
+        paths.append((doc_path, exp_id))
+    return paths
+
+
+def _exp_id_for_doc(doc_path: Path) -> str:
+    """Return the authoritative experiment ID for a documentation file.
+
+    Reads the sibling *_knowledge.json when available — the JSON is the
+    source of truth for the ID, not the filename.  Falls back to the
+    filename stem if the JSON is absent or malformed.
+    """
+    knowledge_path = doc_path.with_name(
+        doc_path.stem.replace("_documentation", "_knowledge") + ".json"
+    )
+    if knowledge_path.exists():
+        try:
+            return json.loads(knowledge_path.read_text(encoding="utf-8"))["experiment"]["id"]
+        except (json.JSONDecodeError, KeyError):
+            logger.warning(
+                "Could not read exp_id from %s — falling back to filename", knowledge_path.name
+            )
+    else:
+        logger.warning("No knowledge JSON found beside %s — falling back to filename", doc_path.name)
+    return doc_path.stem.replace("_documentation", "")
 
 _FACTOR_KEYS = ("chantier", "pole", "lead", "status", "cir_grouping")
 _FACTOR_ALT = "|".join(_FACTOR_KEYS)
@@ -90,9 +105,23 @@ def _extract_field(section: str, field: str) -> str | None:
 def _chunk_run_detail(content: str, source_file: str, experiment_id: str) -> list[dict]:
     parts = re.split(r"### Run ([\w-]+) —[^\n]*\n", content)
     chunks: list[dict] = []
+    first_local_id: str | None = None
+
     for i in range(1, len(parts), 2):
         local_id = parts[i].strip()
+        if first_local_id is None:
+            first_local_id = local_id
         section = parts[i + 1] if i + 1 < len(parts) else ""
+
+        # For the last run, strip post-run sections (## 4, ## 5, …) so its
+        # embedding reflects only the run data, not the experiment summary.
+        is_last = (i + 2 >= len(parts))
+        if is_last:
+            # Everything from the first level-2 heading (## N.) is summary material.
+            m = re.search(r"\n## \d+\.", section)
+            if m:
+                section = section[: m.start()]
+
         run_id = f"{experiment_id}:Run:{local_id}"
         chunks.append(
             {
@@ -108,6 +137,29 @@ def _chunk_run_detail(content: str, source_file: str, experiment_id: str) -> lis
                 "pole": None,
             }
         )
+
+    # Summary chunk: extract sections 4+ (variations table + observations/conclusions).
+    # Linked to the first run so the retrieval Cypher can reach it.
+    last_section = parts[-1] if len(parts) > 1 else ""
+    m_summary = re.search(r"\n(## \d+\..*)", last_section, re.DOTALL)
+    if m_summary and first_local_id is not None:
+        summary_text = m_summary.group(1).strip()
+        run_id_summary = f"{experiment_id}:Run:{first_local_id}"
+        chunks.append(
+            {
+                "id": deterministic_chunk_id(f"{experiment_id}:summary", source_file),
+                "text": f"# {experiment_id} — synthèse et conclusions\n\n{summary_text}",
+                "source_file": source_file,
+                "experiment_id": experiment_id,
+                "run_id": run_id_summary,
+                "chantier": None,
+                "date": None,
+                "lead": None,
+                "type": "experiment_summary",
+                "pole": None,
+            }
+        )
+
     return chunks
 
 
@@ -147,90 +199,174 @@ def chunk_documentation(path: Path, source_type: str) -> list[dict]:
                 }
             )
 
-    elif source_type == "ACE-3":
-        experiment_id = "ACE-3"
-        parts = re.split(r"### Essai (\d+) —[^\n]*\n", content)
-        for i in range(1, len(parts), 2):
-            local_id = parts[i].strip()
-            section = parts[i + 1] if i + 1 < len(parts) else ""
-            run_id = f"{experiment_id}:Run:{local_id}"
-            chunks.append(
-                {
-                    "id": deterministic_chunk_id(run_id, source_file),
-                    "text": f"### Essai {local_id}\n{section.strip()}",
-                    "source_file": source_file,
-                    "experiment_id": experiment_id,
-                    "run_id": run_id,
-                    "chantier": None,
-                    "date": None,
-                    "lead": None,
-                    "type": "run_detail",
-                    "pole": None,
-                }
-            )
-
-    elif source_type in ("ACE-5", "Allumette", "ESC-QUICK"):
-        chunks.extend(_chunk_run_detail(content, source_file, source_type))
-
     else:
-        raise ValueError(f"Unknown source_type: {source_type!r}")
+        # Generic path: all batch_extract.py outputs use ### Run N — title format.
+        chunks.extend(_chunk_run_detail(content, source_file, source_type))
 
     return chunks
 
 
-def upsert_chunk(driver: Driver, chunk: dict) -> None:
+def clean_experiment_chunks(driver: Driver, exp_id: str) -> int:
+    """Delete all Chunk nodes for the given experiment. Returns the count deleted.
+
+    Call this before re-embedding an updated experiment to prevent orphan chunks
+    when documentation structure changes (e.g. Phase 2 results added).
+    """
     with driver.session() as session:
-        session.run(
+        count = session.run(
             """
-            MERGE (c:Chunk {id: $id})
-            SET c.text = $text,
-                c.embedding = $embedding,
-                c.source_file = $source_file,
-                c.experiment_id = $experiment_id,
-                c.run_id = $run_id,
-                c.chantier = $chantier,
-                c.date = $date,
-                c.lead = $lead,
-                c.type = $type,
-                c.pole = $pole
-            WITH c
-            MATCH (run:Run {id: $run_id})
-            MERGE (run)-[:HAS_CHUNK]->(c)
+            MATCH (:Experiment {id: $exp_id})-[:HAS_RUN]->(:Run)-[:HAS_CHUNK]->(c:Chunk)
+            RETURN count(c) AS cnt
             """,
-            id=chunk["id"],
-            text=chunk["text"],
-            embedding=chunk["embedding"],
-            source_file=chunk["source_file"],
-            experiment_id=chunk["experiment_id"],
-            run_id=chunk["run_id"],
-            chantier=chunk.get("chantier"),
-            date=chunk.get("date"),
-            lead=chunk.get("lead"),
-            type=chunk["type"],
-            pole=chunk.get("pole"),
+            exp_id=exp_id,
+        ).single()["cnt"]
+        if count > 0:
+            session.run(
+                """
+                MATCH (:Experiment {id: $exp_id})-[:HAS_RUN]->(:Run)-[:HAS_CHUNK]->(c:Chunk)
+                DETACH DELETE c
+                """,
+                exp_id=exp_id,
+            )
+    return count
+
+
+_UPSERT_BATCH_SIZE = 100
+
+
+def _fetch_existing_hashes(driver: Driver, chunk_ids: list[str]) -> dict[str, str]:
+    """Return {chunk_id: text_hash} for chunks that already have a hash stored."""
+    if not chunk_ids:
+        return {}
+    with driver.session() as session:
+        result = session.run(
+            """
+            UNWIND $ids AS id
+            MATCH (c:Chunk {id: id})
+            WHERE c.text_hash IS NOT NULL
+            RETURN c.id AS id, c.text_hash AS hash
+            """,
+            ids=chunk_ids,
         )
+        return {r["id"]: r["hash"] for r in result}
+
+
+def upsert_chunks_batch(driver: Driver, chunks: list[dict]) -> None:
+    """Upsert chunks in batches of 100 using UNWIND for efficiency."""
+    for i in range(0, len(chunks), _UPSERT_BATCH_SIZE):
+        batch = [
+            {
+                "id": c["id"],
+                "text": c["text"],
+                "text_hash": c["text_hash"],
+                "embedding": c["embedding"],
+                "source_file": c["source_file"],
+                "experiment_id": c["experiment_id"],
+                "run_id": c["run_id"],
+                "chantier": c.get("chantier"),
+                "date": c.get("date"),
+                "lead": c.get("lead"),
+                "type": c["type"],
+                "pole": c.get("pole"),
+            }
+            for c in chunks[i : i + _UPSERT_BATCH_SIZE]
+        ]
+        with driver.session() as session:
+            session.run(
+                """
+                UNWIND $rows AS c
+                MERGE (chunk:Chunk {id: c.id})
+                SET chunk.text = c.text,
+                    chunk.text_hash = c.text_hash,
+                    chunk.embedding = c.embedding,
+                    chunk.source_file = c.source_file,
+                    chunk.experiment_id = c.experiment_id,
+                    chunk.run_id = c.run_id,
+                    chunk.chantier = c.chantier,
+                    chunk.date = c.date,
+                    chunk.lead = c.lead,
+                    chunk.type = c.type,
+                    chunk.pole = c.pole
+                WITH chunk, c
+                MATCH (run:Run {id: c.run_id})
+                MERGE (run)-[:HAS_CHUNK]->(chunk)
+                """,
+                rows=batch,
+            )
+            summary_rows = [c for c in batch if c["type"] == "experiment_summary"]
+            if summary_rows:
+                session.run(
+                    """
+                    UNWIND $rows AS c
+                    MATCH (chunk:Chunk {id: c.id})
+                    MATCH (exp:Experiment {id: c.experiment_id})
+                    MERGE (exp)-[:HAS_SUMMARY]->(chunk)
+                    """,
+                    rows=summary_rows,
+                )
 
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+
+    parser = argparse.ArgumentParser(description="Embed documentation chunks into Neo4j.")
+    parser.add_argument(
+        "--experiment",
+        metavar="EXP_ID",
+        help="Re-embed a single experiment (deletes its old chunks first).",
+    )
+    args = parser.parse_args()
+
     client = OpenAI(api_key=OPENAI_API_KEY)
     driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
 
     try:
+        all_paths = _discover_doc_paths()
+
+        if args.experiment:
+            paths = [(p, t) for p, t in all_paths if t == args.experiment]
+            if not paths:
+                logger.error(
+                    "No documentation found for experiment '%s'. "
+                    "Check that *_documentation.md exists under lien_essai/.",
+                    args.experiment,
+                )
+                return
+            deleted = clean_experiment_chunks(driver, args.experiment)
+            logger.info("Cleaned %d old chunks for %s", deleted, args.experiment)
+        else:
+            paths = all_paths
+
         total = 0
-        for path, source_type in _DOC_PATHS:
+        skipped_total = 0
+        for path, source_type in paths:
             logger.info("Chunking %s (%s)", path.name, source_type)
             chunks = chunk_documentation(path, source_type)
-            logger.info("  %d chunks to embed", len(chunks))
+            if not chunks:
+                logger.warning("  0 chunks produced — check doc format")
+                continue
 
-            for idx, chunk in enumerate(chunks):
+            for chunk in chunks:
+                chunk["text_hash"] = hashlib.sha256(chunk["text"].encode()).hexdigest()
+
+            existing_hashes = _fetch_existing_hashes(driver, [c["id"] for c in chunks])
+            to_embed = [c for c in chunks if existing_hashes.get(c["id"]) != c["text_hash"]]
+            skipped = len(chunks) - len(to_embed)
+
+            logger.info("  %d chunks: %d to embed, %d unchanged (skipped)", len(chunks), len(to_embed), skipped)
+
+            for idx, chunk in enumerate(to_embed):
                 chunk["embedding"] = embed_text(client, chunk["text"])
-                upsert_chunk(driver, chunk)
                 if (idx + 1) % 50 == 0:
-                    logger.info("  %d/%d done", idx + 1, len(chunks))
+                    logger.info("  %d/%d embedded", idx + 1, len(to_embed))
 
-            total += len(chunks)
+            if to_embed:
+                upsert_chunks_batch(driver, to_embed)
 
+            total += len(to_embed)
+            skipped_total += skipped
+
+        logger.info("Done — %d embedded, %d skipped (unchanged)", total, skipped_total)
         with driver.session() as session:
             chunk_count = session.run("MATCH (c:Chunk) RETURN count(c) AS cnt").single()["cnt"]
             rel_count = session.run(

@@ -119,11 +119,15 @@ def test_chunk_experiment_id_is_repertoire(tmp_path):
     assert all(c["experiment_id"] == "REPERTOIRE-RD-2025-2026" for c in chunks)
 
 
-def test_chunk_source_type_unknown_raises(tmp_path):
-    doc = tmp_path / "dummy.md"
-    doc.write_text("content", encoding="utf-8")
-    with pytest.raises(ValueError, match="Unknown source_type"):
-        chunk_documentation(doc, "UNKNOWN")
+def test_chunk_source_type_unknown_uses_generic_path(tmp_path):
+    doc = tmp_path / "MY-EXP_documentation.md"
+    doc.write_text(
+        "# MY-EXP\n\n### Run 1 — Essai 1\n- factors: x=1\n\nTexte.\n",
+        encoding="utf-8",
+    )
+    chunks = chunk_documentation(doc, "MY-EXP")
+    assert len(chunks) >= 1
+    assert chunks[0]["experiment_id"] == "MY-EXP"
 
 
 def _make_allumette_doc(tmp_path: Path) -> Path:
@@ -176,9 +180,9 @@ def _make_ace3_doc(tmp_path: Path) -> Path:
     doc = tmp_path / "ACE-3_documentation.md"
     doc.write_text(
         f"# ACE-3\n\n"
-        f"### Essai 1 {_EM} Formulation A\n"
+        f"### Run 1 {_EM} Ref P02  *(control)*\n"
         f"Texture correcte. Extrudat homogène.\n\n"
-        f"### Essai 2 {_EM} Formulation B\n"
+        f"### Run 2 {_EM} P02 + 0,2% NaCl\n"
         f"Résultats mitigés.\n\n",
         encoding="utf-8",
     )
@@ -258,25 +262,30 @@ _REPERTOIRE_JSON = {
 _ACE3_JSON = {
     "experiment": {
         "id": "ACE-3",
-        "titre": "ACE-3 test",
+        "title": "ACE-3 test",
         "type": "ACE",
-        "objectif": "Tester les formulations",
-        "date_production": "2024-03-01",
-        "operateur": "Jean",
-        "extrudeuse": "Clextral BC45",
-        "domaine": "Extrusion",
+        "objective": "Tester les formulations",
+        "date": "2024-03-01",
+        "operator": "Jean",
+        "equipment": "Clextral BC45",
+        "domain": "Extrusion",
+        "scale": "pilot",
+        "status": "complete",
     },
-    "essais": [
+    "runs": [
         {
-            "essai": 1,
-            "nom": "Formulation A",
-            "note_essai": "Texture correcte",
-            "formulation_detaillee": {
-                "ingredients": [
-                    {"ingredient": "Nutralys S85F"},
-                    {"ingredient": "gluten de ble"},
+            "id": "1",
+            "name": "Ref P02",
+            "is_control": True,
+            "factor_levels": {"NaCl_pct": 0.0},
+            "inputs": {
+                "formulation": [
+                    {"component": "Nutralys S85F"},
+                    {"component": "gluten de ble"},
                 ]
             },
+            "conditions": {},
+            "responses": {},
         }
     ],
 }
@@ -336,6 +345,13 @@ def test_parse_knowledge_json_ace3_run_id_and_ingredients(tmp_path):
     run = result["runs"][0]
     assert run["id"] == "ACE-3:Run:1"
     assert "Nutralys S85F" in run["ingredients"]
+
+
+def test_parse_knowledge_json_ace3_status_and_scale(tmp_path):
+    path = _write_json(tmp_path, "ACE-3_knowledge.json", _ACE3_JSON)
+    result = parse_knowledge_json(path)
+    assert result["experiment"]["status"] == "complete"
+    assert result["experiment"]["scale"] == "pilot"
 
 
 def test_parse_knowledge_json_ace5_dispatched_correctly(tmp_path):
