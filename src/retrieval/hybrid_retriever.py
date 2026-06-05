@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import neo4j
 from neo4j import Driver
 from neo4j_graphrag.embeddings.base import Embedder
@@ -60,6 +62,14 @@ class _OpenAIEmbedder(Embedder):
         return response.data[0].embedding
 
 
+_LUCENE_SPECIAL = re.compile(r'[+\-!(){}[\]^"~*?:\\/]|&&|\|\|')
+
+
+def _sanitize_fulltext(query: str) -> str:
+    """Remove Lucene special characters that would break fulltext query parsing."""
+    return _LUCENE_SPECIAL.sub(" ", query).strip()
+
+
 def _to_dict(record: neo4j.Record) -> dict:
     return {
         "text": record["text"],
@@ -102,7 +112,9 @@ class HybridNeo4jRetriever:
         return self._search_hybrid(query, top_k)
 
     def _search_hybrid(self, query: str, top_k: int) -> list[dict]:
-        result = self._hybrid.get_search_results(query_text=query, top_k=top_k)
+        result = self._hybrid.get_search_results(
+            query_text=_sanitize_fulltext(query), top_k=top_k
+        )
         return [_to_dict(r) for r in result.records]
 
     def _search_filtered(self, query: str, top_k: int, chantier: str) -> list[dict]:
