@@ -17,14 +17,10 @@ LLM_MODEL: str = "claude-sonnet-4-6"
 
 TOP_K_DEFAULT: int = 10
 
-CORPUS_SCOPE: list[str] = ["REPERTOIRE-RD-2025-2026", "ACE-3", "ACE-5"]
+CORPUS_SCOPE: list[str] = []
 
-FALLBACK_MESSAGE: str = (
-    "Information absente du corpus actuel.\n"
-    "Sources indexées : REPERTOIRE-RD-2025-2026 (316 runs), ACE-3, ACE-5.\n"
-    "Les autres fiches d'essai ne sont pas encore intégrées."
-)
+FALLBACK_MESSAGE: str = "Information absente du corpus actuel."
 
 # Calibré empiriquement (calibrate_threshold.py) :
-# présentes min=0.7159/max=0.8333 | absentes min=0.6422/max=0.7517
-SCORE_THRESHOLD: float = 0.7338
+# présentes min=0.7097/max=0.8393 | absentes min=0.6458/max=0.7504
+SCORE_THRESHOLD: float = 0.6997
