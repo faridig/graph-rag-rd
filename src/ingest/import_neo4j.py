@@ -10,6 +10,7 @@ from typing import Any
 from neo4j import Driver, GraphDatabase
 
 from src.config import NEO4J_PASSWORD, NEO4J_URI, NEO4J_USER
+from src.retrieval.sharepoint_urls import get_sharepoint_url, get_url_for_file
 
 logger = logging.getLogger(__name__)
 
@@ -17,13 +18,20 @@ _EXCEL_ARTIFACTS: frozenset[str] = frozenset(
     {"#DIV/0!", "#VALUE!", "#N/A", "#REF!", "#NAME?", "#NULL!", "#NUM!"}
 )
 
-_DATA_PATHS: list[Path] = [
+_LIEN_ESSAI_DIR = Path("data/repertoire_rd_2025-2026/lien_essai")
+
+_FIXED_PATHS: list[Path] = [
     Path("data/repertoire_rd_2025-2026/REPERTOIRE-RD-2025-2026_knowledge.json"),
-    Path("data/repertoire_rd_2025-2026/lien_essai/ACE-3/ACE-3_knowledge.json"),
-    Path("data/repertoire_rd_2025-2026/lien_essai/ACE-5/ACE-5_knowledge.json"),
-    Path("data/repertoire_rd_2025-2026/lien_essai/Essai Allumette-5/Allumette_knowledge.json"),
-    Path("data/repertoire_rd_2025-2026/lien_essai/Escalope panée Quick/ESC-QUICK_knowledge.json"),
 ]
+
+
+def _discover_knowledge_paths() -> list[Path]:
+    """Return all *_knowledge.json files under lien_essai/, sorted for stable ordering."""
+    return sorted(_LIEN_ESSAI_DIR.glob("**/*_knowledge.json"))
+
+
+def _get_data_paths() -> list[Path]:
+    return _FIXED_PATHS + _discover_knowledge_paths()
 
 
 def excel_artifact_to_none(value: Any) -> Any:
@@ -83,50 +91,17 @@ def _parse_repertoire(path: Path, data: dict) -> dict:
     return {"experiment": experiment, "runs": runs}
 
 
-def _parse_ace3(path: Path, data: dict) -> dict:
-    exp_raw = data["experiment"]
-    experiment: dict[str, Any] = {
-        "id": exp_raw["id"],
-        "title": exp_raw.get("titre", exp_raw.get("title", "")),
-        "type": exp_raw.get("type"),
-        "objective": exp_raw.get("objectif", exp_raw.get("objective")),
-        "date": exp_raw.get("date_production", exp_raw.get("date")),
-        "operator": exp_raw.get("operateur", exp_raw.get("operator")),
-        "equipment": exp_raw.get("extrudeuse", exp_raw.get("equipment")),
-        "domain": exp_raw.get("domaine", exp_raw.get("domain")),
-        "source_file": path.name,
-    }
-    exp_id = experiment["id"]
-    runs: list[dict] = []
-    for essai in data.get("essais", []):
-        local_id = str(essai["essai"])
-        raw_ings: list[str] = [
-            ing["ingredient"]
-            for ing in essai.get("formulation_detaillee", {}).get("ingredients", [])
-            if ing.get("ingredient")
-        ]
-        runs.append(
-            {
-                "id": f"{exp_id}:Run:{local_id}",
-                "name": essai.get("nom", local_id),
-                "objective": None,
-                "synthesis": essai.get("note_essai"),
-                "status": None,
-                "date": None,
-                "chantier": None,
-                "lead": None,
-                "pole": None,
-                "cir_grouping": None,
-                "ingredients_raw": raw_ings,
-                "ingredients": [normalize_ingredient_name(i) for i in raw_ings],
-            }
-        )
-    return {"experiment": experiment, "runs": runs}
-
 
 def _parse_experiment_header(path: Path, exp_raw: dict) -> dict[str, Any]:
+    exp_id = exp_raw["id"]
+    # URL priority: explicit in JSON → download.log → static fallback
+    sharepoint_url = (
+        exp_raw.get("sharepoint_url")
+        or get_url_for_file(exp_raw.get("source_file", ""))
+        or get_sharepoint_url(exp_id)
+    )
     return {
-        "id": exp_raw["id"],
+        "id": exp_id,
         "title": exp_raw.get("title", exp_raw.get("titre", "")),
         "type": exp_raw.get("type"),
         "objective": exp_raw.get("objective", exp_raw.get("objectif")),
@@ -134,17 +109,31 @@ def _parse_experiment_header(path: Path, exp_raw: dict) -> dict[str, Any]:
         "operator": exp_raw.get("operator", exp_raw.get("operateur")),
         "equipment": exp_raw.get("equipment", exp_raw.get("extrudeuse")),
         "domain": exp_raw.get("domain", exp_raw.get("domaine")),
+        "scale": exp_raw.get("scale"),
+        "status": exp_raw.get("status"),
+        "sharepoint_url": sharepoint_url,
         "source_file": path.name,
     }
+
+
+def _find_formulation_list(inputs: dict, preferred_key: str) -> list[dict]:
+    """Return the first non-empty list from inputs, preferring preferred_key."""
+    if isinstance(inputs.get(preferred_key), list):
+        return inputs[preferred_key]
+    for v in inputs.values():
+        if isinstance(v, list) and v:
+            return v
+    return []
 
 
 def _parse_runs_with_formulation(data: dict, exp_id: str, formulation_key: str) -> list[dict]:
     runs: list[dict] = []
     for raw_run in data.get("runs", []):
         local_id = str(raw_run["id"])
+        comp_list = _find_formulation_list(raw_run.get("inputs", {}), formulation_key)
         raw_ings: list[str] = [
             item["component"]
-            for item in raw_run.get("inputs", {}).get(formulation_key, [])
+            for item in comp_list
             if item.get("component")
         ]
         notes = raw_run.get("notes")
@@ -178,8 +167,6 @@ def _parse_ace5(path: Path, data: dict) -> dict:
 def parse_knowledge_json(path: Path) -> dict:
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
-    if "essais" in data:
-        return _parse_ace3(path, data)
     exp_id = data.get("experiment", {}).get("id", "")
     if exp_id.upper().startswith("REPERTOIRE"):
         return _parse_repertoire(path, data)
@@ -193,6 +180,7 @@ def parse_knowledge_json(path: Path) -> dict:
     return {
         "experiment": experiment,
         "runs": _parse_runs_with_formulation(data, experiment["id"], formulation_key),
+        "references": data.get("references", []),
     }
 
 
@@ -213,16 +201,20 @@ def import_source(driver: Driver, data: dict) -> dict:
             MERGE (e:Experiment {id: $id})
             SET e.title = $title, e.type = $type, e.objective = $objective,
                 e.date = $date, e.operator = $operator, e.equipment = $equipment,
-                e.domain = $domain, e.source_file = $source_file
+                e.domain = $domain, e.scale = $scale, e.status = $status,
+                e.sharepoint_url = $sharepoint_url, e.source_file = $source_file
             """,
             id=exp["id"],
             title=exp.get("title", ""),
+            scale=exp.get("scale"),
+            status=exp.get("status"),
             type=exp.get("type"),
             objective=exp.get("objective"),
             date=exp.get("date"),
             operator=exp.get("operator"),
             equipment=exp.get("equipment"),
             domain=exp.get("domain"),
+            sharepoint_url=exp.get("sharepoint_url"),
             source_file=exp.get("source_file", ""),
         )
         counts["experiments"] = 1
@@ -315,6 +307,29 @@ def import_source(driver: Driver, data: dict) -> dict:
             )
             counts["ingredients"] += result.single()["cnt"]
 
+        # Cross-experiment [:REFERENCES] edges (new field from batch extraction)
+        def _ref_id(r: Any) -> str | None:
+            if isinstance(r, dict):
+                return r.get("id")
+            return r if isinstance(r, str) else None
+
+        ref_pairs = [
+            {"from_id": exp["id"], "to_id": rid}
+            for r in data.get("references", [])
+            if (rid := _ref_id(r))
+        ]
+        if ref_pairs:
+            session.run(
+                """
+                UNWIND $rows AS row
+                MERGE (src:Experiment {id: row.from_id})
+                MERGE (tgt:Experiment {id: row.to_id})
+                MERGE (src)-[:REFERENCES]->(tgt)
+                """,
+                rows=ref_pairs,
+            )
+            counts["references"] = len(ref_pairs)
+
     return counts
 
 
@@ -330,21 +345,7 @@ def build_details_relations(driver: Driver) -> int:
             """
         )
         count: int = result.single()["cnt"]
-        if count != 2:
-            logger.warning("Expected 2 [:DETAILS] edges, got %d", count)
-        missing = session.run(
-            """
-            MATCH (run:Run) WHERE run.id STARTS WITH "REPERTOIRE-RD-2025-2026:Run:"
-            AND NOT (run)-[:DETAILS]->()
-            AND run.id IN [
-                "REPERTOIRE-RD-2025-2026:Run:ACE-3",
-                "REPERTOIRE-RD-2025-2026:Run:ACE-5"
-            ]
-            RETURN run.id AS run_id
-            """
-        )
-        for record in missing:
-            logger.warning("REPERTOIRE run missing [:DETAILS]: %s", record["run_id"])
+        logger.info("[:DETAILS] edges created/confirmed: %d", count)
     return count
 
 
@@ -352,8 +353,10 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
     try:
+        data_paths = _get_data_paths()
+        logger.info("Importing %d knowledge files", len(data_paths))
         total: dict[str, int] = {}
-        for path in _DATA_PATHS:
+        for path in data_paths:
             logger.info("Importing %s", path.name)
             data = parse_knowledge_json(path)
             counts = import_source(driver, data)
