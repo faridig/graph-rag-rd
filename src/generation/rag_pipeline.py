@@ -24,6 +24,7 @@ from src.ingest.embed_chunks import embed_text
 from src.models import QueryResponse, Source
 from src.retrieval.exact_lookup import exact_lookup
 from src.retrieval.hybrid_retriever import HybridNeo4jRetriever
+from src.retrieval.sharepoint_urls import get_sharepoint_url, get_sharepoint_url_for_run
 
 _CITATION_RE = re.compile(r"\[source:\s*([^\]]+)\]", re.IGNORECASE)
 
@@ -62,7 +63,7 @@ class RAGPipeline:
             ).single()
             return float(record["score"]) if record else 0.0
 
-    def _generate(self, context: str, question: str) -> str:
+    def _generate(self, context: str, question: str) -> tuple[str, int, int]:
         response = self._anthropic.messages.create(
             model=LLM_MODEL,
             max_tokens=2048,
@@ -74,7 +75,11 @@ class RAGPipeline:
                 }
             ],
         )
-        return response.content[0].text
+        return (
+            response.content[0].text,
+            response.usage.input_tokens,
+            response.usage.output_tokens,
+        )
 
     def _verify_citations(self, answer: str, valid_ids: set[str]) -> str:
         """Strip [source: id] markers whose id is not in valid_ids."""
@@ -105,7 +110,7 @@ class RAGPipeline:
             # Exact match found: use as context
             context = _format_exact_context(exact_rows)
             valid_ids = {r["run_id"] for r in exact_rows}
-            sources = [_source_from_exact(r) for r in exact_rows]
+            sources = _build_sources(exact_rows, self._driver, is_exact=True)
         else:
             # ── Hybrid search ─────────────────────────────────────────────────
             filters = {"chantier": chantier} if chantier else None
@@ -118,22 +123,25 @@ class RAGPipeline:
                 )
             context = _format_hybrid_context(chunks)
             valid_ids = {c["run_id"] for c in chunks}
-            sources = [_source_from_chunk(c) for c in chunks]
+            sources = _build_sources(chunks, self._driver, is_exact=False)
 
         # ── Generation ────────────────────────────────────────────────────────
-        answer = self._generate(context, question)
+        answer, in_tok, out_tok = self._generate(context, question)
 
         # ── Citation verification ─────────────────────────────────────────────
         cited = extract_cited_ids(answer)
-        if not cited:
-            # Regenerate once with explicit citation instruction
-            answer = self._generate(context, question + _REGEN_SUFFIX)
+        if not cited and FALLBACK_MESSAGE not in answer:
+            answer, in2, out2 = self._generate(context, question + _REGEN_SUFFIX)
+            in_tok += in2
+            out_tok += out2
         answer = self._verify_citations(answer, valid_ids)
 
         return QueryResponse(
             answer=answer,
             sources=sources,
             found_in_corpus=True,
+            input_tokens=in_tok,
+            output_tokens=out_tok,
         )
 
 
@@ -141,7 +149,20 @@ class RAGPipeline:
 
 
 def _format_hybrid_context(chunks: list[dict]) -> str:
-    parts = [f"[Source: {c['run_id']}]\n{c['text']}" for c in chunks]
+    parts = []
+    for c in chunks:
+        header = f"[Source: {c['run_id']}]"
+        if c.get("date"):
+            header += f" — {c['date']}"
+        lines = [header]
+        if c.get("objective"):
+            lines.append(f"Objectif: {c['objective']}")
+        if c.get("synthesis"):
+            lines.append(f"Synthèse: {c['synthesis']}")
+        if c.get("ingredients"):
+            lines.append(f"Ingrédients: {', '.join(c['ingredients'])}")
+        lines.append(c["text"])
+        parts.append("\n".join(lines))
     return "\n---\n".join(parts)
 
 
@@ -159,26 +180,52 @@ def _format_exact_context(rows: list[dict]) -> str:
     return "\n---\n".join(parts)
 
 
-def _source_from_chunk(chunk: dict) -> Source:
-    exp_id = chunk.get("experiment_id") or ""
-    return Source(
-        run_id=chunk["run_id"],
-        experiment_id=exp_id,
-        source_file=f"{exp_id}_documentation.md" if exp_id else "",
-        score=float(chunk.get("score") or 0.0),
-        name=chunk.get("run_name") or "",
-    )
+import logging as _logging  # noqa: E402 — kept near usage
+
+_log = _logging.getLogger(__name__)
 
 
-def _source_from_exact(row: dict) -> Source:
-    exp_id = row.get("experiment_id") or ""
-    return Source(
-        run_id=row["run_id"],
-        experiment_id=exp_id,
-        source_file=f"{exp_id}_documentation.md" if exp_id else "",
-        score=0.0,
-        name=row.get("run_name") or "",
-    )
+def _fetch_urls_from_neo4j(driver: Driver, exp_ids: list[str]) -> dict[str, str]:
+    """Single batched query: exp_id → sharepoint_url for all requested IDs."""
+    if not exp_ids:
+        return {}
+    try:
+        with driver.session() as session:
+            records = session.run(
+                "MATCH (e:Experiment) WHERE e.id IN $ids AND e.sharepoint_url IS NOT NULL "
+                "RETURN e.id AS id, e.sharepoint_url AS url",
+                ids=exp_ids,
+            ).data()
+            return {r["id"]: r["url"] for r in records if r["url"]}
+    except Exception as exc:
+        _log.debug("Neo4j URL lookup failed: %s", exc)
+        return {}
+
+
+def _build_sources(items: list[dict], driver: Driver, is_exact: bool) -> list[Source]:
+    """Build Source list with a single batched Neo4j URL lookup."""
+    exp_ids = list({(item.get("experiment_id") or "") for item in items})
+    neo4j_urls = _fetch_urls_from_neo4j(driver, [e for e in exp_ids if e])
+
+    sources = []
+    for item in items:
+        exp_id = item.get("experiment_id") or ""
+        run_id = item["run_id"]
+        # URL priority: Neo4j → run prefix deep link → static fallback
+        url = (
+            neo4j_urls.get(exp_id)
+            or get_sharepoint_url_for_run(run_id)
+            or get_sharepoint_url(exp_id)
+        )
+        sources.append(Source(
+            run_id=run_id,
+            experiment_id=exp_id,
+            source_file=f"{exp_id}_documentation.md" if exp_id else "",
+            score=0.0 if is_exact else float(item.get("score") or 0.0),
+            name=item.get("run_name") or "",
+            sharepoint_url=url,
+        ))
+    return sources
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
