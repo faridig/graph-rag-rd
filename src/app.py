@@ -30,9 +30,9 @@ def _humanize_citations(text: str) -> str:
     return _RUN_ID_RE.sub(lambda m: f"[source: {_format_run_id(m.group(1).strip())}]", text)
 
 
-def _ask(question: str, chantier: str) -> tuple[str, str]:
+def _ask(question: str, chantier: str) -> tuple[str, str, str]:
     if not question.strip():
-        return "", ""
+        return "", "", ""
     response = run_query(
         _pipeline,
         question.strip(),
@@ -45,64 +45,54 @@ def _ask(question: str, chantier: str) -> tuple[str, str]:
             label = f"**{_format_run_id(s.run_id)}**"
             if s.name:
                 label += f" — {s.name}"
-            lines.append(f"- {label} *(score: {s.score:.3f})*")
+            suffix = f" *(score: {s.score:.3f})*"
+            if s.sharepoint_url:
+                suffix += f" [📄 Ouvrir]({s.sharepoint_url})"
+            lines.append(f"- {label}{suffix}")
         sources_md = "\n".join(lines)
-    return _humanize_citations(response.answer), sources_md
+    tokens_md = (
+        f"**Tokens** — entrée : {response.input_tokens:,} · sortie : {response.output_tokens:,}"
+        if response.found_in_corpus
+        else ""
+    )
+    return _humanize_citations(response.answer), sources_md, tokens_md
 
 
 with gr.Blocks(title="ACCRO R&D Knowledge Base") as demo:
-    gr.Markdown(
-        "# ACCRO R&D — Base de connaissances\n"
-        "Interrogez les essais R&D (RÉPERTOIRE 2025-2026, ACE-3, ACE-5)."
-    )
+    gr.Markdown("# ACCRO R&D — Base de connaissances")
 
-    with gr.Row():
-        with gr.Column(scale=4):
-            question = gr.Textbox(
-                label="Question",
-                placeholder="Ex : Quel effet a l'huile sur M03 ?",
-                lines=2,
-            )
-        with gr.Column(scale=1):
-            chantier = gr.Textbox(
-                label="Filtrer par chantier (optionnel)",
-                placeholder="Ex : Extrusion",
-            )
+    question = gr.Textbox(
+        label="Question",
+        placeholder="Ex : Quel effet a l'huile sur M03 ?",
+        lines=2,
+    )
 
     submit = gr.Button("Rechercher", variant="primary")
     status = gr.Markdown(value="", visible=False)
 
     answer = gr.Markdown(label="Réponse")
     sources = gr.Markdown(label="Sources")
+    tokens = gr.Markdown(label="")
 
     def _set_loading() -> tuple:
-        return gr.update(interactive=False, value="Recherche en cours…"), gr.update(visible=True, value="_Recherche en cours…_"), "", ""
+        return gr.update(interactive=False, value="Recherche en cours…"), gr.update(visible=True, value="_Recherche en cours…_"), "", "", ""
 
-    def _ask_and_reset(question: str, chantier: str) -> tuple:
-        answer_text, sources_text = _ask(question, chantier)
-        return gr.update(interactive=True, value="Rechercher"), gr.update(visible=False, value=""), answer_text, sources_text
+    def _ask_and_reset(question: str) -> tuple:
+        answer_text, sources_text, tokens_text = _ask(question, "")
+        return gr.update(interactive=True, value="Rechercher"), gr.update(visible=False, value=""), answer_text, sources_text, tokens_text
 
     for event in (submit.click, question.submit):
         event(
             fn=_set_loading,
             inputs=[],
-            outputs=[submit, status, answer, sources],
+            outputs=[submit, status, answer, sources, tokens],
             queue=False,
         ).then(
             fn=_ask_and_reset,
-            inputs=[question, chantier],
-            outputs=[submit, status, answer, sources],
+            inputs=[question],
+            outputs=[submit, status, answer, sources, tokens],
         )
 
-    gr.Examples(
-        examples=[
-            ["Quel effet a l'huile sur la texture de M03 ?", ""],
-            ["Synthèse des essais fibres en extrusion", ""],
-            ["Kobé arôme boeuf TVP résultats", ""],
-            ["Pisane ES a-t-il été testé ?", ""],
-        ],
-        inputs=[question, chantier],
-    )
 
 if __name__ == "__main__":
     demo.launch(theme=gr.themes.Soft())

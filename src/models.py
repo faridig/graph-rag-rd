@@ -9,6 +9,7 @@ class Source(BaseModel):
     source_file: str
     score: float
     name: str = ""
+    sharepoint_url: str | None = None
 
 
 class QueryRequest(BaseModel):
@@ -22,3 +23,5 @@ class QueryResponse(BaseModel):
     sources: list[Source]
     found_in_corpus: bool
     corpus_scope: list[str] = CORPUS_SCOPE
+    input_tokens: int = 0
+    output_tokens: int = 0
