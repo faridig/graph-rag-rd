@@ -1,0 +1,506 @@
+[
+  {
+    "question": "Quels sont les scores sensoriels (goût et intensité) obtenus pour le run MA-S44-2 (Merguez Accro S44 – Arôme OV-924-953-4) ?",
+    "ground_truth": "Le run MA-S44-2 avec l'arôme OV-924-953-4 dosé à 1,03% a obtenu un score goût de 2,09/5 et un score intensité de 5,18/9. Il a été jugé meilleur que l'arôme UQ, bien rond et umami, mais manquant peut-être d'épice.",
+    "type": "factuelle",
+    "experiment_id": "PP-18"
+  },
+  {
+    "question": "Quelles conclusions générales peut-on tirer de l'ensemble des runs de la série S44-2025 sur la gamme Merguez MDD concernant la sélection des arômes candidats ?",
+    "ground_truth": "Sur la série S44-2025 Merguez MDD, l'arôme OV-924-953-4 (1,03%) s'est révélé insuffisamment intense (intensité 3,73/9 en dégustation 1), tandis que l'arôme UQ-169-659-9 (2,0%) a été largement préféré à OV en dégustation 1 (intensité 5,36/9, goût 2,27/5) mais restait inférieur à la référence ZH en dégustation du 23/12/25. Ces deux pistes ont finalement été abandonnées au profit de nouveaux arômes MN-490-565-2 et TL-431-728-3 évalués en février 2026.",
+    "type": "synthèse",
+    "experiment_id": "PP-18"
+  },
+  {
+    "question": "En comparant les runs MMDD-S44-1 (OV-924-953-4 à 1,03%) et MMDD-S44-2 (UQ-169-659-9 à 2,0%) sur la base Merguez MDD, quelles différences observe-t-on sur les scores sensoriels de goût et d'intensité ?",
+    "ground_truth": "Le run MMDD-S44-2 (UQ à 2,0%) présente un score goût de 2,27/5 et une intensité de 5,36/9, contre 2,18/5 et 3,73/9 pour le run MMDD-S44-1 (OV à 1,03%). L'arôme UQ à 2% est donc sensoriellement supérieur à OV à 1,03% sur cette base MDD, avec notamment une intensité bien plus élevée (+1,63 points sur l'échelle à 9 points), ce qui explique que UQ ait été largement préféré à OV en dégustation 1, même si les deux restent inférieurs à la référence ZH.",
+    "type": "comparative",
+    "experiment_id": "PP-18"
+  },
+  {
+    "question": "Dans la session COULEUR-S1, quel run a obtenu le score panel_ressemblant_score le plus élevé, et quelle était sa valeur ?",
+    "ground_truth": "Le run COULEUR-S1-4 (Malt 0.25%) a obtenu le score panel_ressemblant_score le plus élevé de la session S1, avec une valeur de 0.50, ce qui en faisait le produit le plus ressemblant à la référence Beyond Meat.",
+    "type": "factuelle",
+    "experiment_id": "KOBE-2026-AMELIORATIONS"
+  },
+  {
+    "question": "Quelles conclusions générales peut-on tirer des sessions de travail sur la couleur (S1 et S2) concernant les agents colorants testés pour le steak Kobé ?",
+    "ground_truth": "Les essais de la session S1 (16/12/2025) ont montré que les produits contenant uniquement du CIOCAROB DARK ou du malt extract à faibles doses donnaient des résultats trop marrons/jaunes, avec un manque de teinte rose/violet. Les essais 3 et 4 (malt 0.20% et 0.25%) ont été préférés à cuit, le malt 0.25% étant le plus ressemblant à la référence Beyond Meat (score 0.50). La série CIOCAROB DARK (runs 5-8) n'a pas été retenue comme satisfaisante. En session S2 (16/01/2026), l'ajout d'un colorant complémentaire Shade Veggie Red Exberry à 0.2% combiné au Veggie Red 0.5% et au malt 0.25% a abouti au run préféré (COULEUR-S2-4), indiquant que l'association de plusieurs colorants est nécessaire pour atteindre la teinte rose/violet recherchée.",
+    "type": "synthèse",
+    "experiment_id": "KOBE-2026-AMELIORATIONS"
+  },
+  {
+    "question": "En comparant les runs COULEUR-S1-3 (Malt 0.20%) et COULEUR-S1-4 (Malt 0.25%), quelles différences observe-t-on dans les scores panel et qu'est-ce qui les distingue sur le plan qualitatif ?",
+    "ground_truth": "Les deux runs COULEUR-S1-3 et COULEUR-S1-4 ont obtenu le même score panel_prefere_score de 0.42 (préférés ex-aequo). Cependant, ils diffèrent sur le score panel_ressemblant_score : COULEUR-S1-3 obtient 0.25, tandis que COULEUR-S1-4 obtient 0.50, ce qui en fait le produit le plus ressemblant à la référence Beyond Meat. Sur le plan qualitatif, COULEUR-S1-3 a été décrit comme « bien grillé à cuit » par le panel, tandis que COULEUR-S1-4 est distingué par sa meilleure ressemblance visuelle à Beyond Meat. La seule différence de formulation entre les deux est la dose de malt extract : 0.20% (0.64 g) pour S1-3 contre 0.25% (0.80 g) pour S1-4.",
+    "type": "comparative",
+    "experiment_id": "KOBE-2026-AMELIORATIONS"
+  },
+  {
+    "question": "Quelle est la valeur de SME enregistrée lors du Run 3 (P01 isoR EF200 + 58% eau) de l'essai FIB-4, et quelle est la pression filière correspondante ?",
+    "ground_truth": "Lors du Run 3 de l'essai FIB-4, le SME est de 72 Wh/kg et la pression filière est de 11 bar.",
+    "type": "factuelle",
+    "experiment_id": "FIB-4"
+  },
+  {
+    "question": "Quelles conclusions générales peut-on tirer des 4 runs de l'essai FIB-4 concernant l'effet de la fibre EF200 et du taux d'humidité sur l'énergie mécanique spécifique (SME) par rapport à la référence Pea Fiber I50M ?",
+    "ground_truth": "Sur les 4 runs de FIB-4, la substitution de Pea Fiber I50M par EF200 combinée à +1 % d'eau (fraction 0,58) entraîne la plus forte réduction du SME (-8,9 % soit -7,0 Wh/kg, passant de 79 à 72 Wh/kg). La simple réduction de dose de fibre de 20 % à 13 % (Run 2) ou la combinaison EF200 + Gluten ADM + 58 % eau (Run 4) produisent une réduction moindre du SME (-3,8 % soit -3,0 Wh/kg). Ces résultats suggèrent que la fibre EF200 et l'apport d'eau supplémentaire contribuent ensemble à diminuer l'énergie mécanique nécessaire à l'extrusion.",
+    "type": "synthèse",
+    "experiment_id": "FIB-4"
+  },
+  {
+    "question": "En comparant le Run 3 (EF200 + Gluten Roquette + 58 % eau) et le Run 4 (EF200 + Gluten ADM + 58 % eau), quelles différences observe-t-on sur le SME, la pression filière et le couple ?",
+    "ground_truth": "Le Run 3 (EF200 + Gluten Roquette + 58 % eau) présente un SME de 72 Wh/kg, une pression filière de 11 bar et un couple de 9 %, tandis que le Run 4 (EF200 + Gluten ADM + 58 % eau) affiche un SME de 76 Wh/kg, une pression filière de 14 bar et un couple de 10 %. Le remplacement du Gluten Roquette par le Gluten ADM se traduit donc par une augmentation du SME (+4 Wh/kg), de la pression filière (+3 bar) et du couple (+1 point), à formulation et taux d'humidité identiques.",
+    "type": "comparative",
+    "experiment_id": "FIB-4"
+  },
+  {
+    "question": "Quelle est la valeur de la SME (Specific Mechanical Energy) mesurée lors du Run 1 (contrôle, sel 0.1% matrice) de l'essai Allumette ?",
+    "ground_truth": "La SME mesurée lors du Run 1 (Allumette essai 1 - Sel 0.1% matrice, run contrôle) est de 88.77 Wh/kg.",
+    "type": "factuelle",
+    "experiment_id": "Allumette"
+  },
+  {
+    "question": "Quelles conclusions générales peut-on tirer de l'essai Allumette concernant l'effet de la teneur en sel sur l'absorption en eau et la stabilité procédé des bandes texturees ?",
+    "ground_truth": "Sur les trois doses de sel testées (0.1%, 1.0% et 3.0% matrice), l'absorption en eau est maximale à 1.0% de sel (1.503 g, soit +6.6% vs contrôle), puis redescend à 1.39 g à 3.0% de sel (-1.4% vs contrôle), proche du niveau contrôle à 0.1% (1.41 g). Sur le plan procédé, les runs à 0.1% et 1.0% de sel présentent une bonne fibration et couleur vive sans perturbation, tandis que le run à 3.0% de sel génère une déstabilisation initiale nécessitant une augmentation de température sur les deux derniers fourreaux (Z9-Z10) avant stabilisation. Par ailleurs, la SME diminue progressivement avec la teneur en sel (88.77 → 81.66 → 78.13 Wh/kg) et la pression filière chute significativement à 3.0% de sel (24 → 22 → 16 bar), indiquant un effet plastifiant/lubrifiant du sel à forte dose.",
+    "type": "synthèse",
+    "experiment_id": "Allumette"
+  },
+  {
+    "question": "Comment la pression filière (die pressure) et la SME évoluent-elles entre le Run 1 (sel 0.1% matrice) et le Run 3 (sel 3.0% matrice), et qu'est-ce que cela suggère sur le rôle du sel dans le procédé HME ?",
+    "ground_truth": "Entre le Run 1 (sel 0.1% matrice) et le Run 3 (sel 3.0% matrice), la pression filière diminue de 24 bar à 16 bar (-33%) et la SME diminue de 88.77 Wh/kg à 78.13 Wh/kg (-12%). Ces réductions conjointes suggèrent que le sel, à dose élevée, agit comme un plastifiant ou lubrifiant de la matrice protéique dans l'extrudeur HME, réduisant les résistances mécaniques et la pression à la filière. Cette hypothèse est cohérente avec la déstabilisation du procédé observée en début de Run 3, qui a nécessité une augmentation de la température des deux derniers fourreaux pour retrouver une extrusion stable.",
+    "type": "comparative",
+    "experiment_id": "Allumette"
+  },
+  {
+    "question": "Quelle était la température réelle mesurée au cône filière lors du run EI-KEBAB-550, et quelle était la consigne programmée ?",
+    "ground_truth": "La consigne du cône filière était de 130 °C, mais la température réelle mesurée était de 76 °C, soit un écart de 54 °C qualifié d'anomalie majeure à investiguer.",
+    "type": "factuelle",
+    "experiment_id": "EI-KEBAB-550"
+  },
+  {
+    "question": "Quelles sont les principales conclusions et prochaines étapes issues de l'essai EI-KEBAB-550 concernant la montée en débit à 550 kg/h pour les émincés façon kebab ?",
+    "ground_truth": "Le débit cible de 550 kg/h a été atteint. Les paramètres Holac (programme H11 éminces, coupe 3 mm, grille aléatoire) et de refroidissement cryogénique (-70 °C, 2 min 20 s) ont été identifiés. La dégustation a été validée par l'ensemble des participants. Cependant, un déséquilibre de flux en sortie filière (côté droit vs côté gauche) n'est que partiellement résolu. Les prochaines étapes incluent : retester avec les températures filière uniformes à 98 °C, réaliser une deuxième dégustation, compléter la caractérisation physico-chimique et nutritionnelle, réaliser les analyses microbiologiques et le vieillissement complet, et investiguer l'écart consigne/réel sur la température du cône filière (130 °C vs 76 °C).",
+    "type": "synthèse",
+    "experiment_id": "EI-KEBAB-550"
+  },
+  {
+    "question": "Dans l'essai EI-KEBAB-550, comment se compare la pression mesurée au manteau gauche par rapport au manteau droit de la filière, et quelle interprétation process en est donnée ?",
+    "ground_truth": "La pression au manteau gauche était de 8 bar, contre 10 bar au manteau droit, soit une dissymétrie de 2 bar. Cette différence est décrite comme cohérente avec le déséquilibre de flux observé en sortie filière entre le côté gauche et le côté droit.",
+    "type": "comparative",
+    "experiment_id": "EI-KEBAB-550"
+  },
+  {
+    "question": "Quelle est la valeur de SME (Wh/kg) mesurée lors du Run 6 de l'essai NPT-DEV-2, et quelles étaient les conditions particulières de ce run ?",
+    "ground_truth": "Le Run 6 de NPT-DEV-2 affiche une SME de 114,55 Wh/kg, la plus élevée de l'essai. Ce run correspond à une alimentation 100% poudre sèche (débit eau = 0 kg/h), sans thermorégulation de la filière, à une vitesse de vis de 351 rpm et un couple de 26 %.",
+    "type": "factuelle",
+    "experiment_id": "NPT-DEV-2"
+  },
+  {
+    "question": "Quelles conclusions générales peut-on tirer de l'essai NPT-DEV-2 sur l'effet du taux d'eau, de la température des fourreaux et de l'ajout d'huile de tournesol sur le comportement de la bande extrudée et les propriétés mesurées ?",
+    "ground_truth": "L'essai NPT-DEV-2 met en évidence plusieurs tendances : (1) Augmenter le taux d'eau de 48,39% (Run 1) à 50% (Run 3) à température filière constante (~105°C) provoque un déchirement important de la bande, une hausse de la pression filière (de 13 à 16 bar) et de la SME (de 78,35 à 81,68 Wh/kg). (2) Réduire les températures fourreaux à 140°C (Run 4) à taux d'eau 50% améliore la tenue de la bande, mais augmente encore la pression filière (21 bar) et la SME (84,53 Wh/kg), tout en réduisant l'absorption d'eau (0,3635 vs 0,3975). (3) L'ajout de 4% d'huile de tournesol (Run 5) avec abaissement de la filière à ~98°C et augmentation de la vitesse vis à 600 rpm réduit nettement la pression filière (7 bar) et la SME (78,5 Wh/kg), et améliore l'absorption d'eau (0,4595). (4) Le Run 6 en alimentation sèche sans eau génère une SME très élevée (114,55 Wh/kg) et un couple important (26%), illustrant le rôle plastifiant de l'eau en HME.",
+    "type": "synthèse",
+    "experiment_id": "NPT-DEV-2"
+  },
+  {
+    "question": "En comparant le Run 3 et le Run 4 de NPT-DEV-2, quel est l'effet de la réduction des températures fourreaux de 144–149°C à 140°C sur les pressions, la SME, la teneur en humidité et l'absorption d'eau, à taux d'eau identique de 50% ?",
+    "ground_truth": "Entre le Run 3 (fourreaux haut, Z7–Z10 : 144–149°C setpoint) et le Run 4 (fourreaux bas, Z7–Z10 : 140°C setpoint), à taux d'eau identique de 50% et vitesse vis 550 rpm : la pression de butée augmente de 40 à 47 bar (+7 bar), la pression filière passe de 16 à 21 bar (+5 bar), la SME augmente de 81,68 à 84,53 Wh/kg (+2,85 Wh/kg), la température matière diminue de 132°C à 128°C (-4°C), la teneur en humidité baisse de 51,66% à 50,01%, et l'absorption d'eau diminue de 0,3975 à 0,3635. En contrepartie, la bande tient mieux mécaniquement avec les fourreaux à 140°C.",
+    "type": "comparative",
+    "experiment_id": "NPT-DEV-2"
+  },
+  {
+    "question": "Dans l'Essai 1 (Run 1, M03 ADM, Nutralys F85M, sans acide citrique), quelle est la valeur de SME (Wh/kg) et la pression filière (bar) enregistrées au régime cible (step 6, 650 rpm) ?",
+    "ground_truth": "Au step 6 (régime cible, 650 rpm) de l'Essai 1, la SME est de 71,59 Wh/kg et la pression filière est de 12 bar. Le régime permanent est atteint sans aucun pic de pression observé.",
+    "type": "factuelle",
+    "experiment_id": "GLU-2"
+  },
+  {
+    "question": "Quelles sont les conclusions générales de l'essai GLU-2 concernant le protocole de démarrage à chaud sur l'extrudeuse EV32 en configuration M03 ADM ?",
+    "ground_truth": "L'essai GLU-2 valide le démarrage à chaud (toutes zones chauffées dès t=0) en configuration M03 ADM sur l'EV32. L'Essai 1 (Nutralys F85M, sans acide citrique) confirme que le régime permanent est atteignable sans pic de pression, bien qu'un complément avec le mix M03 Roquette ait été nécessaire au step 5 en raison d'un manque de poudre ADM. L'Essai 2 (Nutralys F853M, sans acide citrique) a également été conduit selon la même rampe de montée progressive en vitesse (400 à 650 rpm) et en température de zone (90 à 145 °C), afin d'évaluer si la substitution de F85M par F853M modifie le comportement en pression lors du démarrage.",
+    "type": "synthèse",
+    "experiment_id": "GLU-2"
+  },
+  {
+    "question": "En comparant l'Essai 1 (Nutralys F85M) et l'Essai 2 (Nutralys F853M) au step 1 (400 rpm, démarrage), quelles différences observe-t-on sur la température matière et la pression filière ?",
+    "ground_truth": "Au step 1 (400 rpm), l'Essai 1 avec Nutralys F85M affiche une température matière de 83 °C et une pression filière de 3 bar, tandis que l'Essai 2 avec Nutralys F853M présente une température matière plus basse de 80 °C et une pression filière également plus basse de 1 bar. La SME est aussi légèrement inférieure pour F853M (40,60 Wh/kg vs 42,96 Wh/kg pour F85M), suggérant un comportement rhéologique différent dès le démarrage avec la grade F853M.",
+    "type": "comparative",
+    "experiment_id": "GLU-2"
+  },
+  {
+    "question": "Quel est le pH mesuré à J25 pour le run S2-R4 (émincés Flavoset 0,7 %) et en quoi diffère-t-il du témoin Provian NDV (S2-R3) au même stade ?",
+    "ground_truth": "Le pH à J25 du run S2-R4 (émincés Flavoset 0,7 %) est de 5,297 ± 0,163, contre 6,317 ± 0,204 pour le témoin Provian NDV (S2-R3). Cet écart d'environ une unité pH traduit une acidification significative induite par le Flavoset au cours du vieillissement.",
+    "type": "factuelle",
+    "experiment_id": "CONSERVATEUR-VIEILLISSEMENT"
+  },
+  {
+    "question": "Quels enseignements généraux peut-on tirer de l'ensemble des runs de la série 2 concernant la capacité du Flavoset à remplacer le Provian NDV sur steak frais et émincés jusqu'à J25 ?",
+    "ground_truth": "Sur la série 2, le Flavoset à 0,7 % ne constitue pas un substitut satisfaisant au Provian NDV à 0,75 % : sur les émincés il provoque une acidification marquée (pH 5,30 vs 6,32 à J25) avec défauts sensoriels (odeur soufrée, barquettes gonflées) et microbiologie dégradée. Sur les steaks, la fermeté (2,63 vs 3,18 N à J25) et la luminosité L* (53,29 vs 56,42) sont légèrement inférieures avec le Flavoset.",
+    "type": "synthèse",
+    "experiment_id": "CONSERVATEUR-VIEILLISSEMENT"
+  },
+  {
+    "question": "En comparant les runs S2-R1 (steak Provian NDV 0,75 %) et S2-R2 (steak Flavoset 0,7 %), quelle différence observe-t-on sur la texture (force de cisaillement maximale) et la couleur (L* et a*) à J0 et à J25 ?",
+    "ground_truth": "À J0, la force de cisaillement maximale est de 2 564,23 ± 334,28 g pour le témoin Provian NDV (S2-R1) contre 2 460,06 ± 238,31 g pour le Flavoset (S2-R2), soit une différence modeste. À J25, elle passe à 3,18 ± 0,11 N (Provian) contre 2,63 ± 0,16 N (Flavoset), indiquant un steak légèrement moins ferme avec le Flavoset. Sur la couleur, à J0 la luminosité L* est de 54,94 pour le Provian vs 51,51 pour le Flavoset (steak Flavoset plus sombre) ; à J25, L* est de 56,42 vs 53,29 respectivement. Pour a* (rougeur), les valeurs sont similaires à J0 (13,35 vs 14,24) mais légèrement supérieures avec le Flavoset à J25 (7,41 vs 6,27), le steak Flavoset conservant un peu plus de rougeur résiduelle.",
+    "type": "comparative",
+    "experiment_id": "CONSERVATEUR-VIEILLISSEMENT"
+  },
+  {
+    "question": "Quel était le rang de préférence du Run S1-R3 (SAVOUR'EAZE PROVENCALE CONGELE 5232 Daregal à 8%) lors de la dégustation du 13/03/2024, et quelle note particulière a été formulée à son sujet ?",
+    "ground_truth": "Le Run S1-R3 a obtenu le rang de préférence 1/5 (meilleur rang de la session S1). La note formulée était : 'Plus dans l'univers saucisses, origan, plus prononcé que le 1 et 2, apprécié', avec la mention 'Le 3 à montrer au marketing?'.",
+    "type": "factuelle",
+    "experiment_id": "SAUCISSES-HERBES"
+  },
+  {
+    "question": "En synthétisant les résultats des sessions S1 et S2, quelles grandes tendances se dégagent quant aux types d'arômes ou d'ingrédients herbes les plus et les moins appréciés dans ce screening ?",
+    "ground_truth": "Les ingrédients à base de vraies herbes ou d'extraits encapsulés donnent les meilleurs résultats organoleptiques : le SAVOUR'EAZE PROVENCALE CONGELE Daregal (8%, rang 1/5 en S1) est jugé 'dans l'univers saucisses, apprécié', et le PureDelivery Pearl ZO-612-777-6 Givaudan (0.2%, rang 1/6 en S2) est noté 'goût herbes bon, visuel bien'. À l'inverse, les arômes liquides Firmenich (PORK COOKED FLAVOR + GARLIC FLAVOR, rang 4/5 ; SAUSAGE FLAVOR VEG + GARLIC FLAVOR, rang 5/5 dernier) sont mal reçus, décrits comme 'goût bizarre', 'pas herbes', 'piquant, pas bon'. L'huile infusée Daregal 6148 occupe une position intermédiaire (rang 2/5), appréciée pour sa jutosité mais avec un arrière-goût piquant/cuisiné. Le contrôle M425 Daregal à 1.5% obtient un rang 3/5.",
+    "type": "synthèse",
+    "experiment_id": "SAUCISSES-HERBES"
+  },
+  {
+    "question": "En comparant les runs S1-R4 (PORK COOKED FLAVOR + GARLIC FLAVOR Firmenich) et S1-R3 (SAVOUR'EAZE PROVENCALE CONGELE Daregal), quelles différences observe-t-on en termes de dose d'ingrédient herbe, de rang de préférence et de description sensorielle ?",
+    "ground_truth": "Le Run S1-R3 utilise SAVOUR'EAZE PROVENCALE CONGELE Daregal à 8.0% et obtient le rang de préférence 1/5 avec la description 'Plus dans l'univers saucisses, origan, plus prononcé, apprécié'. Le Run S1-R4 utilise la combinaison PORK COOKED FLAVOR (0.1%) + GARLIC FLAVOR (0.05%) Firmenich, soit une dose totale de 0.15%, et obtient le rang 4/5 avec la description 'Pas de marquants, goût bizarre, ail et oignon mais pas herbes'. Ainsi, une dose très élevée de vraies herbes congelées (8%) performe nettement mieux qu'une faible dose d'arômes de synthèse Firmenich (0.15%), tant en termes de rang de préférence que de profil sensoriel herbes.",
+    "type": "comparative",
+    "experiment_id": "SAUCISSES-HERBES"
+  },
+  {
+    "question": "Quelle est la force de cisaillement maximale moyenne (maximum_shear_force) mesurée à J0 pour le run P2-T-STEAK (Steak Témoin Provian NDV 0,75%) ?",
+    "ground_truth": "La force de cisaillement maximale moyenne à J0 pour le run P2-T-STEAK est de 2564,229 g (écart-type : 334,278 g), mesurée avec le programme 'côté coupant – haché façon bouchère'.",
+    "type": "factuelle",
+    "experiment_id": "CONS-VIEILL-01"
+  },
+  {
+    "question": "En synthétisant les données de vieillissement de l'essai CONS-VIEILL-01, quels paramètres analytiques ont été suivis pour évaluer la DLC des steaks et émincés végétaux, et quels points temporels ont été couverts ?",
+    "ground_truth": "L'essai CONS-VIEILL-01 a évalué la DLC des steaks et émincés végétaux sur 6 points temporels (J0, J10, J20, J25, J28, J33). Les paramètres suivis incluaient la microbiologie (flore totale, bactéries lactiques, Listeria, Salmonella), la texture (force de cisaillement maximale), la couleur L*a*b*, le pH et l'atmosphère du packaging (O₂, CO₂, N₂).",
+    "type": "synthèse",
+    "experiment_id": "CONS-VIEILL-01"
+  },
+  {
+    "question": "En comparant le run P1-T-STEAK (Témoin Provian NDV 0,75%) et le run P1-E1-STEAK (Flavoset 0,7%), quelle différence de formulation a été appliquée pour compenser la réduction de dose du conservateur, et quelle observation sensorielle a été notée sur le Flavoset à 0,7% ?",
+    "ground_truth": "Pour compenser la réduction de 0,05% de dose de conservateur (passage de Provian NDV 0,75% à Flavoset 0,7%), le run P1-E1-STEAK a augmenté la proportion d'eau d'ajustement de 5,233% à 5,283% (soit +0,05% en poids). Sur le plan sensoriel, la note indique que l'on sent fortement le sel dans le steak E1 (avec Flavoset) lors de la comparaison avec le témoin.",
+    "type": "comparative",
+    "experiment_id": "CONS-VIEILL-01"
+  },
+  {
+    "question": "Quelle est la pression à la filière (die_pressure_bar) mesurée lors du run PEA-W568A-1-V1 (Pea W568A, T130/500rpm/55%, session 2024-09-11) ?",
+    "ground_truth": "La pression à la filière lors du run PEA-W568A-1-V1 était de 12.1 bar.",
+    "type": "factuelle",
+    "experiment_id": "PP-REC-12"
+  },
+  {
+    "question": "Quels effets généraux l'augmentation de la teneur en eau (de 55% à 61%) a-t-elle sur les propriétés texturales des extrudats de Pea Ref (Nutralys F85M lot 755716) à T140/500rpm, d'après les runs PEA-REF-2, PEA-REF-6-1, PEA-REF-6-2 et PEA-REF-6-3 ?",
+    "ground_truth": "Sur les runs PEA-REF-2, PEA-REF-6-1 à 6-3, l'augmentation de l'eau de 55 % à 61 % entraîne une diminution progressive de la dureté (32 490 → 20 580 g), de la force de coupe transversale, de la mastication et de la WHC. La luminosité L* augmente (53,9 → 58,1), indiquant un extrudat plus clair. La pression filière et la SME diminuent également avec l'ajout d'eau.",
+    "type": "synthèse",
+    "experiment_id": "PP-REC-12"
+  },
+  {
+    "question": "En comparant les runs PEA-REF-3 (400 rpm) et PEA-REF-4 (600 rpm), tous deux à T140°C et 55% d'eau avec Pea Ref (Nutralys F85M lot 755716), quelles différences observe-t-on sur la SME, la pression à la filière et l'anisotropie ?",
+    "ground_truth": "À 400 rpm (PEA-REF-3), la SME est de 0.058 kWh/kg et la pression à la filière de 7.7 bar, avec une anisotropie de 1.1736. À 600 rpm (PEA-REF-4), la SME est plus élevée à 0.103 kWh/kg et la pression à la filière légèrement supérieure à 8.0 bar, mais l'anisotropie est plus faible à 1.0456. Ainsi, augmenter la vitesse de vis de 400 à 600 rpm augmente l'énergie mécanique spécifique de +77% et la pression de filière de +0.3 bar, mais réduit l'anisotropie de l'extrudat, suggérant une structuration fibreuse moins marquée à vitesse élevée.",
+    "type": "comparative",
+    "experiment_id": "PP-REC-12"
+  },
+  {
+    "question": "Quelle est la valeur de dureté TPA (hardness) mesurée lors du run-1 de l'essai EI-DEBIT-M03002 (08/04/25) à 550 kg/h avec le profil Accro ?",
+    "ground_truth": "La dureté TPA mesurée lors du run-1 (08/04/25, profil Accro, 550 kg/h) est de 6700 g. Cette valeur est reportée comme légèrement supérieure à la référence des essais du 19/03/25 à 500 kg/h, mais la valeur de référence exacte n'est pas fournie dans ce rapport.",
+    "type": "factuelle",
+    "experiment_id": "EI-DEBIT-M03002"
+  },
+  {
+    "question": "Quelles sont les principales conclusions de l'essai industriel EI-DEBIT-M03002 concernant la faisabilité du passage à 550 kg/h sur la recette M03002 avec le profil de vis Accro ?",
+    "ground_truth": "L'essai EI-DEBIT-M03002 conclut que : (1) le profil de vis Accro est validé pour la recette M03002 ; (2) le débit de 550 kg/h est faisable, avec un démarrage à reproduire selon le protocole du 08/04/25 ; (3) les thermorégulateurs fonctionnent à leur capacité maximale, nécessitant une consultation de Buhler pour valider l'usage long terme ; (4) le vieillissement planifié a été annulé suite à une contamination par bactérie lactique dans l'inotec, une coupure de courant et un pH non conforme, et reprogrammé au 01/07/2025 ; (5) la cible de température au cône de 127°C est difficile à atteindre, avec ~123°C observés en pratique.",
+    "type": "synthèse",
+    "experiment_id": "EI-DEBIT-M03002"
+  },
+  {
+    "question": "Quelles différences observe-t-on entre le run-1 (08/04/25) et le run-3 (09/04/25) de l'essai EI-DEBIT-M03002, notamment en termes de conditions de démarrage et de données de texture disponibles ?",
+    "ground_truth": "Le run-1 (08/04/25) et le run-3 (09/04/25) partagent les mêmes facteurs : profil Accro, débit de démarrage 425 kg/h, débit de production 550 kg/h, et eau priotherm standard. La principale différence de contexte est que le run-3 a été réalisé en démarrage standard après l'échec du test eau priotherm augmentée (run-2 annulé). En termes de données, seul le run-1 dispose d'une mesure de texture (hardness TPA = 6700 g) et d'une température de cône mesurée (~123°C) ; le run-3 ne présente aucune mesure de texture individuelle reportée ni de température cône renseignée dans le rapport.",
+    "type": "comparative",
+    "experiment_id": "EI-DEBIT-M03002"
+  },
+  {
+    "question": "Quelle est la valeur de l'indice d'anisotropie (AI) obtenu lors du Run 3 (M03 DST essai 3 – Soja / Tmat 120°C) et comment est-il calculé ?",
+    "ground_truth": "L'indice d'anisotropie du Run 3 est de 3,232, calculé à partir du rapport Cut_T / Cut_L = 2189,095 g / 677,306 g. Il s'agit du meilleur AI des trois essais M03 soja, obtenu à la température matière mixeur de 120°C, identifiée comme condition optimale pour la fibration.",
+    "type": "factuelle",
+    "experiment_id": "DST-DECOUVERTE-241212"
+  },
+  {
+    "question": "Quelles conclusions générales peut-on tirer des essais de découverte DST (rapport DST-DECOUVERTE-241212) concernant la faisabilité du procédé et ses principaux leviers de performance ?",
+    "ground_truth": "Les essais montrent que le procédé DST permet d'obtenir des bandes fibrées avec des indices d'anisotropie élevés, tous supérieurs à la cible de 1,2 (AI M03 : 1,86 à 3,23 ; AI P01 calculé : ~2,26). La température matière dans le mixeur est le levier clé : 120°C donne systématiquement le meilleur produit. La SME est plus élevée qu'en HME (120 Wh/kg pour le Jour 1). Le procédé offre des avantages tels que le CIP sans démontage, la flexibilité fournisseur et la dissociation des temps de séjour/températures entre mixeur et filière, mais présente des faiblesses comme un démarrage long (>40 min), peu de recul scientifique et l'encombrement de la filière.",
+    "type": "synthèse",
+    "experiment_id": "DST-DECOUVERTE-241212"
+  },
+  {
+    "question": "En comparant le Run 1 (M03 DST essai 1 – Soja / Tmat 113°C) et le Run 4 (P01 DST – Pois Greenboy / Tmat 114°C), quelles différences observe-t-on en termes de mâchabilité (chewiness) et de dureté (hardness) ?",
+    "ground_truth": "Le Run 1 (soja, M03, Tmat 113°C) présente une mâchabilité de 1033,73 ± 148,16 g et une dureté de 9712,94 ± 324,72 g. Le Run 4 (pois Greenboy, P01, Tmat 114°C) affiche une mâchabilité nettement inférieure de 212,39 ± 13,6 g et une dureté de 7544,92 ± 154,94 g. La mâchabilité du Run 4 est environ 5 fois plus faible que celle du Run 1, et la dureté est inférieure d'environ 2 168 g, ce qui confirme que les essais pois génèrent des textures significativement moins fermes et moins masticables que les essais soja.",
+    "type": "comparative",
+    "experiment_id": "DST-DECOUVERTE-241212"
+  },
+  {
+    "question": "Dans le run AROME-TEXAS-POIVRE-E1-20250606, quelle est la dose de Prétaline utilisée comme épaississant et quel est le protocole de marinade associé ?",
+    "ground_truth": "Dans le run AROME-TEXAS-POIVRE-E1-20250606, la Prétaline est utilisée à 1,2 % (soit 3,0 g pour 250 g de marinade totale) comme épaississant à froid, avec un protocole de marinade à froid (baratte 23 min), sans chauffage.",
+    "type": "factuelle",
+    "experiment_id": "ESSAIS-MDD-BOULETTES-ITALIENNES"
+  },
+  {
+    "question": "En synthétisant les résultats des différentes sessions de dégustation (mars, avril, juin 2025), quels arômes et combinaisons ont été les mieux classés pour la saveur bœuf/BBQ grillé et quelles améliorations ont été récurramment demandées ?",
+    "ground_truth": "L'arôme Texas Steakhouse Mane à 3 % (AROME-S1-E8) a été classé 1er en dégustation marketing du 31/03 (très BBQ, belles inclusions). En avril, l'arôme Créanova bœuf grillé type Korean BBQ à 4 % (AROME-S3-E5) a été le préféré du groupe. Demandes récurrentes : augmenter la note bœuf/grillée, baisser l'intensité poivre, réduire le sel.",
+    "type": "synthèse",
+    "experiment_id": "ESSAIS-MDD-BOULETTES-ITALIENNES"
+  },
+  {
+    "question": "En comparant le run AROME-S1-E6 (New York Mane @ 4 %) et le run AROME-S1-E8 (Texas Steakhouse Mane @ 3 %), quelles différences de résultats sensoriels et de classement ont été observées lors des dégustations ?",
+    "ground_truth": "Le run AROME-S1-E6 (New York Mane @ 4 %) a été jugé très beau au visuel mais manquant un peu de note bœuf lors de la dégustation du 18/03 ; en session du 20/03, il a été noté comme manquant de note grillée (Essai 16 = Essai 5). Son classement final est ESSAI 6 = ESSAI 5 > ESSAI 1 = ESSAI 7. Le run AROME-S1-E8 (Texas Steakhouse Mane @ 3 %) a été jugé bien mais manquant un peu de bœuf le 18/03, avec une mauvaise absorption notée en session du 20/03 (Essai 17 = Essai 6). Cependant, il a été classé 1er lors de la dégustation marketing du 31/03 (belles inclusions, très BBQ, TB), avec une recommandation de baisser le sel. Ainsi, Texas Steakhouse s'est distingué favorablement en dégustation marketing malgré une dose inférieure (3 % vs 4 %), tandis que New York Mane a été reconnu visuellement supérieur mais insuffisant en profil grillé.",
+    "type": "comparative",
+    "experiment_id": "ESSAIS-MDD-BOULETTES-ITALIENNES"
+  },
+  {
+    "question": "Quelle est la valeur de la CRE mesurée lors du Run 11 (Essai 11 — 1.5% huile, Zone 5, 30 kg/h) et pourquoi est-elle qualifiée de favorable ?",
+    "ground_truth": "La CRE du Run 11 est de 0.07321 ± 0.004441 g eau/g produit. Elle est qualifiée de favorable car elle est ≥ 0.07, obtenue dans des conditions de température et SME modérées (129 °C, 57.06 Wh/kg) avec une injection en Zone 5.",
+    "type": "factuelle",
+    "experiment_id": "SCALE-UP-1"
+  },
+  {
+    "question": "En intégrant l'ensemble des runs de l'étude SCALE-UP-1, quelles tendances générales se dégagent concernant l'effet du taux d'huile et du débit sur la fermeté et la CRE ?",
+    "ground_truth": "L'augmentation du taux d'huile à 3 % s'accompagne d'une réduction marquée de la fermeté (les runs à 3 % huile affichent des fermetés autour de 9 000–12 000 g contre 14 000–16 300 g sans huile) et d'une SME plus faible. La CRE ne suit pas un schéma univoque : certains runs à 3 % huile présentent des CRE élevées (Run 9 : 0.05989, Run 10 : 0.06067, Run 12 : 0.07266) tandis que d'autres sont faibles (Run 8 : 0.03837). Les débits élevés (40 kg/h) réduisent le temps de séjour (≈ 1.5 s) et la SME, ce qui tend à abaisser la fermeté et peut pénaliser la CRE, comme observé dans les runs 4, 6, 8 et 9. Les débits faibles (20 kg/h) produisent des temps de séjour plus longs (≈ 3.3–3.4 s) et des SME élevées, favorisant généralement des fermetés et CRE plus élevées.",
+    "type": "synthèse",
+    "experiment_id": "SCALE-UP-1"
+  },
+  {
+    "question": "En comparant le Run 6 (3% huile, Zone 8, 40 kg/h) et le Run 8 (3% huile, Zone 2, 40 kg/h), quelles différences observe-t-on sur la fermeté, la CRE et la SME ?",
+    "ground_truth": "Le Run 6 (Zone 8) présente une fermeté de 9 612 ± 232 g et une CRE de 0.04867 ± 0.000687 g eau/g produit, avec une SME de 39.26 Wh/kg. Le Run 8 (Zone 2) présente une fermeté légèrement inférieure de 9 039 ± 799 g et une CRE nettement plus faible de 0.03837 ± 0.008914 g eau/g produit, avec une SME de 41.71 Wh/kg. Ainsi, à 3 % d'huile et 40 kg/h, l'injection en Zone 8 (tardive) conduit à une meilleure CRE (+27 % environ) qu'en Zone 2 (précoce), tandis que la fermeté reste comparable. La SME est légèrement plus élevée en Zone 2. Le Run 8 présente également une variabilité importante sur la CRE (CV élevé) et un replicate de fermeté manquant.",
+    "type": "comparative",
+    "experiment_id": "SCALE-UP-1"
+  },
+  {
+    "question": "Quel run de la session 1 a obtenu le plus grand nombre de votes de préférence, et quelle fraction cela représente-t-il ?",
+    "ground_truth": "Le run S1-R2 (Firmenich SAUSAGE FLAVOR VEG 588261 2CB + SMOKE HICKORY + MEATY UMAMI) a obtenu le plus grand nombre de votes de préférence en session 1, avec 5 votes soit une fraction de 0.71 (71% des panélistes).",
+    "type": "factuelle",
+    "experiment_id": "MORTEAU-ESSAIS-LABO"
+  },
+  {
+    "question": "Quels sont les principaux défauts organoleptiques récurrents identifiés à travers les runs des sessions 1 et 2 de ces essais labo saucisse de Morteau végétale ?",
+    "ground_truth": "Les défauts récurrents identifiés sur l'ensemble des runs des sessions 1 et 2 sont : un manque de sel systématique (noté sur tous les runs de session 1 : S1-R1, S1-R2), une note fumée insuffisante (S1-R2, S2-R1), et un aspect farineux au formage noté de façon générale en session 2. Les notes de porc restent globalement faibles (scores intensité porc entre 3.29 et 5.14 sur une échelle 1–9 en session 1).",
+    "type": "synthèse",
+    "experiment_id": "MORTEAU-ESSAIS-LABO"
+  },
+  {
+    "question": "En comparant les runs S1-R1 et S1-R2, quelles différences observe-t-on en termes d'intensité de note fumée, d'intensité de note porc et de préférence des panélistes ?",
+    "ground_truth": "S1-R1 (PORK SLOW BOILED + SMOKE HICKORY + MEATY UMAMI) présente une intensité fumée de 5.29/9 et une intensité porc de 3.57/9, avec seulement 2 votes de préférence (fraction 0.29). S1-R2 (SAUSAGE FLAVOR VEG + SMOKE HICKORY + MEATY UMAMI) présente une intensité fumée plus faible à 2.71/9 mais une intensité porc plus élevée à 5.14/9, et est nettement préféré avec 5 votes (fraction 0.71). Ainsi, S1-R2 est supérieur en note porc et en préférence globale, tandis que S1-R1 est supérieur en intensité fumée.",
+    "type": "comparative",
+    "experiment_id": "MORTEAU-ESSAIS-LABO"
+  },
+  {
+    "question": "Quelle est la dose d'arôme principal utilisée dans le run 20250318-4 (Cumberland E25047037 Mane) et quelle quantité en grammes cela représente-t-il ?",
+    "ground_truth": "Dans le run 20250318-4, l'arôme Cumberland Style Sausage E25047037 est utilisé à 4.0 % de la matrice, ce qui correspond à 10.0 g pour le batch préparé.",
+    "type": "factuelle",
+    "experiment_id": "ESSAIS-SAUCISSE-ANGLAISE"
+  },
+  {
+    "question": "Quelles conclusions générales peut-on tirer des sessions de screening aromatique des 05/03, 18/03 et 03/04/2025 concernant les combinaisons d'arômes testées pour la saucisse à l'anglaise végétale ?",
+    "ground_truth": "Les essais couvrent trois sessions. La session du 05/03/2025 teste des arômes seuls ou en combo : OF-698-654-5 à 2% (seul), MG-664-208-2 à 1% combiné à BH-470-333-7 0.5% et IP-177-863-3 0.15%, et 151V23012 Colin à 2% (seul). La session du 18/03/2025 évalue deux arômes Cumberland Mane (E25047037 à 4% et E25047038 à 2.5%) ainsi qu'une répétition du Colin 151V23012 à 2%, notée 'le même que le 3' lors de la dégustation. La session du 03/04/2025 explore des combos Givaudan (OF 2%+BH 2% et OF 2%+IP 1%), tous deux jugés trop intenses lors de la dégustation du 17/04, ainsi qu'un arôme Silésia 1402502155 Cumberland à 1.5%. La base protéique est constante (SF42-B08004-H04 à 46.27%) pour tous les runs documentés.",
+    "type": "synthèse",
+    "experiment_id": "ESSAIS-SAUCISSE-ANGLAISE"
+  },
+  {
+    "question": "En comparant les runs 20250403-1 (OF 2% + BH 2%) et 20250403-2 (OF 2% + IP 1%), quelles différences de formulation observe-t-on et quel résultat sensoriel partagent-ils ?",
+    "ground_truth": "Les deux runs partagent l'arôme principal OF-698-654-5 à 2.0% (4.999983 g). Ils diffèrent par l'arôme secondaire : le run 20250403-1 utilise BH-470-333-7 PureDelivery Spice blend à 2.0% (4.999983 g), tandis que le run 20250403-2 utilise IP-177-863-3 PureDelivery Everfresh 102 à 1.0% (2.499992 g). La dose d'eau libre diffère également : 2.49% (6.224979 g) pour 20250403-1 contre 3.49% (8.724971 g) pour 20250403-2. Sur le plan sensoriel, les deux formules ont été jugées 'trop intenses' lors de la dégustation du 17/04.",
+    "type": "comparative",
+    "experiment_id": "ESSAIS-SAUCISSE-ANGLAISE"
+  },
+  {
+    "question": "Quelle est la quantité exacte de B12 incorporée dans le Run 2 (formule B), en pourcentage de la matrice et en grammes pour un batch de 420 g ?",
+    "ground_truth": "Dans le Run 2 (Steak Carrefour — formule B), la vitamine B12 est incorporée à 0.002672 % de la matrice, soit 0.0676 g pour un batch de 420 g.",
+    "type": "factuelle",
+    "experiment_id": "ESSAIS-MDD-STEAKS-CARREFOUR"
+  },
+  {
+    "question": "Quels sont les principaux changements de formulation intervenus entre les essais d'octobre 2024 (runs 1 et 2) et les essais d'avril 2025 (runs 3 et 4), et quelle conclusion globale en découle ?",
+    "ground_truth": "Entre 2024 et 2025, quatre changements clés ont été opérés : (1) substitution de la base protéique (bande gluten/pois 80/20 + acide citrique → M02001 H08) ; (2) ajout de Nutralys F85M à 1 % (isolat de protéine de pois Roquette), ce qui a porté le total émulsion de 44.45 % à 45.45 % (+1 pp) ; (3) remplacement de l'arôme EN-165-664-3 par OQ 610 306 4 et du conservateur Provian NDV par DV303 ; (4) réduction de l'eau d'hydratation ajoutée à la base protéique (5.23–5.33 % → 4.33 %, soit −0.9 pp). La formule 2025 a été validée par le panel Carrefour, confirmant l'achat du produit par le client.",
+    "type": "synthèse",
+    "experiment_id": "ESSAIS-MDD-STEAKS-CARREFOUR"
+  },
+  {
+    "question": "En comparant le Run 1 (formule A, 2024) et le Run 3 (panel Carrefour, 2025), quelles différences observe-t-on sur le taux de Veggie Red 01#, la présence de Nutralys F85M et la taille de batch ?",
+    "ground_truth": "Le Run 1 (formule A, octobre 2024) utilise Veggie Red 01# à 0.7 % (2.94 g), ne contient pas de Nutralys F85M, et correspond à un batch de 420 g. Le Run 3 (panel Carrefour, avril 2025) réduit le Veggie Red 01# à 0.5 % (5.0 g), intègre Nutralys F85M à 1 % (10.0 g, fournisseur Roquette), et est produit en 4 batchs de 1 000 g chacun pour un total de 4 000 g. Le Run 1 ne contient aucun arôme OQ 610 306 4 ni DV303, tandis que le Run 3 utilise ces deux références en remplacement de EN-165-664-3 et Provian NDV.",
+    "type": "comparative",
+    "experiment_id": "ESSAIS-MDD-STEAKS-CARREFOUR"
+  },
+  {
+    "question": "Quel était le poids moyen mesuré des croquetas lors de l'essai EI-CROQUETAS-1, et quel écart cela représente-t-il par rapport à l'objectif de 25 g ?",
+    "ground_truth": "Le poids moyen mesuré lors de l'essai EI-CROQUETAS-1 était de 27 g, soit un écart de +2 g (+8 %) par rapport à l'objectif cible de 25 g.",
+    "type": "factuelle",
+    "experiment_id": "EI-CROQUETAS-1"
+  },
+  {
+    "question": "Quelles conclusions générales peut-on tirer de l'essai industriel EI-CROQUETAS-1 concernant la maîtrise du process de fabrication des croquetas végétales ?",
+    "ground_truth": "L'essai EI-CROQUETAS-1 a permis une première production avec un succès partiel. La pâte, initialement trop liquide, a été stabilisée par refroidissement progressif. Le débit de la formeuse a été maintenu stable à 800 kg/h. Le problème d'adhérence de la chapelure a été résolu par un double passage et l'ajout du breader fin B-30. En revanche, le poids cible de 25 g n'a pas été atteint (27 g mesurés). Les prochaines étapes prévoient de préparer la mêlée la veille, d'ajuster les réglages de la formeuse et des batteurs, et d'évaluer le risque de déphasage eau/matière grasse lié à l'ajout de froid.",
+    "type": "synthèse",
+    "experiment_id": "EI-CROQUETAS-1"
+  },
+  {
+    "question": "Quelles différences de comportement de la pâte ont été observées entre une température de mêlée de -1,5 °C et de -2,0 °C lors de l'essai EI-CROQUETAS-1 ?",
+    "ground_truth": "À -1,5 °C, la pâte était dure et facilement formable. À -2,0 °C (température retenue pour le Run 1), la pâte était légèrement collante mais jugée acceptable pour la production. Les deux températures ont été testées dans le cadre du design expérimental de cet essai.",
+    "type": "comparative",
+    "experiment_id": "EI-CROQUETAS-1"
+  },
+  {
+    "question": "Quel score d'appréciation aromatique (échelle 1 à 5) a obtenu le run S01R1 (MUTTON FLAVOR 513753 CB à 0.5%) et quel commentaire de dégustation lui a été associé ?",
+    "ground_truth": "Le run S01R1 a obtenu un score d'appréciation aromatique de 4.0/5, accompagné du commentaire 'Fade, neutre'.",
+    "type": "factuelle",
+    "experiment_id": "KEFTA-BOULETTES-LAB"
+  },
+  {
+    "question": "En intégrant les résultats des sessions 1 et 2, quelles tendances générales se dégagent concernant l'effet des arômes complémentaires (TASTY et GRILL) sur les scores d'appréciation et les votes de préférence des boulettes kefta végétales ?",
+    "ground_truth": "L'ajout des arômes TASTY FLAVOR 513475 2CB et GRILL MARINADE FLAVOR aux formulations de base (MUTTON ou LAMB seul) n'améliore pas systématiquement le score d'appréciation aromatique : par exemple, S01R1 (MUTTON seul) obtient 4.0/5 alors que S01R2 (MUTTON + TASTY + GRILL TH) tombe à 2.75/5 et S01R3 (MUTTON + TASTY + GRILL 1CB) à 2.5/5. En termes de préférence au sein des groupes, c'est S01R6 (LAMB + TASTY + GRILL 1CB 0.07%) qui concentre la majorité des votes dans le groupe Lamb (0.75 fraction), tandis que dans le groupe Mutton, S01R3 ne recueille qu'1 vote sur 4. Les arômes complémentaires semblent davantage différencier les formulations en termes de préférence relative qu'améliorer les scores absolus d'appréciation.",
+    "type": "synthèse",
+    "experiment_id": "KEFTA-BOULETTES-LAB"
+  },
+  {
+    "question": "En comparant les runs S01R5 et S01R6, quelles différences observe-t-on dans la formulation et les résultats de préférence, tous deux basés sur LAMB FLAVOR 523437 1CB à 0.6% avec TASTY 0.25% ?",
+    "ground_truth": "S01R5 utilise le GRILL MARINADE FLAVOR 513652 TH à 0.04% (forme TH) avec une eau d'ajustement de 5.94% et obtient une fraction de préférence de 0.25 dans le groupe Lamb. S01R6 utilise le GRILL MARINADE FLAVOR 513496 1CB à 0.07% (forme 1CB) avec une eau d'ajustement de 5.91% et obtient une fraction de préférence de 0.75, ce qui en fait le run préféré du groupe Lamb, malgré un score d'appréciation aromatique légèrement inférieur (2.25/5 contre 2.5/5 pour S01R5). La différence principale réside dans le type et la dose d'arôme grillé : 1CB à 0.07% est davantage plébiscité en préférence que TH à 0.04%.",
+    "type": "comparative",
+    "experiment_id": "KEFTA-BOULETTES-LAB"
+  },
+  {
+    "question": "L'essai ACE-6 s'inscrit-il dans la continuité d'un essai précédent sur le psyllium dans P01, et lequel ?",
+    "ground_truth": "ACE-6 est décrit comme une nouvelle tentative depuis ACE-1 d'incorporation de psyllium dans la formule P01 sur l'EV32. L'objectif est d'évaluer le psyllium Adinal (puretés 99 % et 95 %, dose 3 %) à deux teneurs en eau (57 % et 59 %) et deux vitesses de vis (625 rpm et 450 rpm) sur la texture, la SME et l'absorption en eau.",
+    "type": "cross_experiment",
+    "experiment_id": "ACE-6"
+  },
+  {
+    "question": "L'essai ACE-1 reproduit-il un essai antérieur, et quelle est la formulation de contrôle utilisée à son Run 1 ?",
+    "ground_truth": "ACE-1 est présenté comme la reproduction de l'essai JUT-REC-11 sur l'EV32, afin d'augmenter la jutosité de P01 en incorporant du psyllium Fibrinel PSL. Son Run 1 (contrôle sans psyllium) utilise la formulation de référence issue de FIB-10 : 20 % Pea Fiber I50M, 4 % huile, 57 % eau à 625 rpm.",
+    "type": "cross_experiment",
+    "experiment_id": "ACE-1"
+  },
+  {
+    "question": "Y a-t-il des données sur l'utilisation de protéines de lupin en extrusion haute humidité dans les essais R&D ?",
+    "ground_truth": "Oui. L'isolat de lupin LP90 (WOA) a été testé dans PP-REC-12. Les essais montrent que le lupin ne produit pas de fibration anisotrope à 55% d'eau (anisotropie < 1 sur tous les runs, ex. LUPINE-1 : 0.782, LUPINE-3 : 0.893). Pigmentation orange marquée (a* ≈ 9–11). Conclusion : LP90 seul ne convient pas pour un HMMA fibré sur cette configuration.",
+    "type": "factuelle",
+    "experiment_id": "PP-REC-12"
+  },
+  {
+    "question": "Quels résultats ont été obtenus lors des essais d'extrusion basse humidité (LME) sur la formule M03 ?",
+    "ground_truth": "Information absente du corpus actuel.",
+    "type": "absent",
+    "experiment_id": null
+  },
+  {
+    "question": "Quelles propriétés a-t-on mesurées lors de l'essai DST-7 ?",
+    "ground_truth": "Information absente du corpus actuel.",
+    "type": "absent",
+    "experiment_id": null
+  },
+  {
+    "question": "Quels résultats l'essai ACE-8 a-t-il produits sur l'extrusion P01 ?",
+    "ground_truth": "Information absente du corpus actuel.",
+    "type": "absent",
+    "experiment_id": null
+  },
+  {
+    "question": "Y a-t-il des données sur l'incorporation de méthylcellulose dans les formulations d'analogues de viande extrudés ?",
+    "ground_truth": "Information absente du corpus actuel.",
+    "type": "absent",
+    "experiment_id": null
+  },
+  {
+    "question": "Quels essais de fermentation lactique ont été conduits sur les analogues de viande végétaux dans ce corpus R&D ?",
+    "ground_truth": "Information absente du corpus actuel.",
+    "type": "absent",
+    "experiment_id": null
+  },
+  {
+    "question": "Quels résultats l'essai ACE-9 a-t-il produits sur la formule P01 ?",
+    "ground_truth": "Information absente du corpus actuel.",
+    "type": "absent",
+    "experiment_id": null
+  },
+  {
+    "question": "Quelles observations a-t-on notées lors de l'essai FIB-5 sur la fibre alimentaire ?",
+    "ground_truth": "Information absente du corpus actuel.",
+    "type": "absent",
+    "experiment_id": null
+  },
+  {
+    "question": "Quelles formulations ont été testées dans l'essai FIB-7 ?",
+    "ground_truth": "Information absente du corpus actuel.",
+    "type": "absent",
+    "experiment_id": null
+  },
+  {
+    "question": "Quels résultats l'essai GLU-3 a-t-il produits sur le glaçage des émincés ?",
+    "ground_truth": "Information absente du corpus actuel.",
+    "type": "absent",
+    "experiment_id": null
+  },
+  {
+    "question": "Quels résultats ont été obtenus dans l'essai STRIP-2 ?",
+    "ground_truth": "Information absente du corpus actuel.",
+    "type": "absent",
+    "experiment_id": null
+  },
+  {
+    "question": "Quelles conclusions peut-on tirer de l'essai STRIP-20 sur la texturation ?",
+    "ground_truth": "Information absente du corpus actuel.",
+    "type": "absent",
+    "experiment_id": null
+  },
+  {
+    "question": "Quels paramètres procédé ont été mesurés dans l'essai DST-8 ?",
+    "ground_truth": "Information absente du corpus actuel.",
+    "type": "absent",
+    "experiment_id": null
+  },
+  {
+    "question": "Quels résultats l'essai NPT-DEV-3 a-t-il produits sur le développement nutritionnel ?",
+    "ground_truth": "Information absente du corpus actuel.",
+    "type": "absent",
+    "experiment_id": null
+  },
+  {
+    "question": "Quels résultats l'essai BACON-2 a-t-il produits sur la texturation des lardons végétaux ?",
+    "ground_truth": "Information absente du corpus actuel.",
+    "type": "absent",
+    "experiment_id": null
+  },
+  {
+    "question": "Quelles formulations ont été testées dans l'essai PP-10 ?",
+    "ground_truth": "Information absente du corpus actuel.",
+    "type": "absent",
+    "experiment_id": null
+  },
+  {
+    "question": "Quelle formulation a été utilisée dans l'essai JUT-REC-4 pour la jutosité ?",
+    "ground_truth": "Information absente du corpus actuel.",
+    "type": "absent",
+    "experiment_id": null
+  },
+  {
+    "question": "Quels résultats de jutosité l'essai JUT-REC-11 a-t-il obtenus ?",
+    "ground_truth": "Information absente du corpus actuel.",
+    "type": "absent",
+    "experiment_id": null
+  },
+  {
+    "question": "Y a-t-il des données sur l'utilisation de carraghénanes dans les formulations d'analogues de viande ?",
+    "ground_truth": "Information absente du corpus actuel.",
+    "type": "absent",
+    "experiment_id": null
+  },
+  {
+    "question": "Des essais d'incorporation de gomme xanthane ont-ils été réalisés sur les extrudats HME ?",
+    "ground_truth": "Information absente du corpus actuel.",
+    "type": "absent",
+    "experiment_id": null
+  },
+  {
+    "question": "Y a-t-il des expériences de lyophilisation des protéines végétales dans ce corpus ?",
+    "ground_truth": "Information absente du corpus actuel.",
+    "type": "absent",
+    "experiment_id": null
+  },
+  {
+    "question": "Des essais de spray drying ont-ils été conduits sur les analogues de viande végétaux ?",
+    "ground_truth": "Information absente du corpus actuel.",
+    "type": "absent",
+    "experiment_id": null
+  }
+]
