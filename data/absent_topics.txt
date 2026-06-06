@@ -1,0 +1,20 @@
+# Sujets confirmés absents du corpus RAG.
+# Une entrée par ligne. Insensible à la casse. Ignorer les lignes vides et les commentaires (#).
+# Ajouter ici tout concept/ingrédient demandé par les utilisateurs mais absent du corpus.
+# Le pipeline recharge ce fichier automatiquement (TTL configurable via RAG_IDS_CACHE_TTL).
+
+# Hydrocolloïdes / texturants non testés
+méthylcellulose
+methylcellulose
+carraghénane
+carrageenan
+gomme xanthane
+xanthan gum
+
+# Procédés non couverts
+fermentation lactique
+lyophilisation
+spray drying
+
+# Acronymes spécifiques
+# (LME) est déjà couvert par _TOPIC_ACRONYM_RE — listé ici pour documentation

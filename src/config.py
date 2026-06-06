@@ -15,12 +15,21 @@ EMBEDDING_DIMS: int = 1536
 
 LLM_MODEL: str = "claude-sonnet-4-6"
 
-TOP_K_DEFAULT: int = 10
+TOP_K_DEFAULT: int = 6
 
 CORPUS_SCOPE: list[str] = []
+
+# Chemin vers la liste des sujets absents du corpus (rechargé périodiquement).
+ABSENT_TOPICS_PATH: str = os.path.join(
+    os.path.dirname(__file__), "..", "data", "absent_topics.txt"
+)
+
+# TTL en secondes pour le rechargement des sets d'IDs Neo4j et du fichier absent_topics.
+# Valeur 0 = rechargement à chaque requête (désactiver en prod si Neo4j est lent).
+RAG_IDS_CACHE_TTL: int = int(os.getenv("RAG_IDS_CACHE_TTL", "300"))
 
 FALLBACK_MESSAGE: str = "Information absente du corpus actuel."
 
 # Calibré empiriquement (calibrate_threshold.py) :
-# présentes min=0.6798/max=0.8283 | absentes min=0.6475/max=0.7507
-SCORE_THRESHOLD: float = 0.6698
+# présentes min=0.6789/max=0.8310 | absentes min=0.6843/max=0.8122
+SCORE_THRESHOLD: float = 0.6689

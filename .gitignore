@@ -6,5 +6,7 @@ __pycache__/
 htmlcov/
 .coverage
 data/
+!data/absent_topics.txt
+!data/testset.json
 .venv/
 venv/

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from collections.abc import Iterator
 
 import anthropic
@@ -11,6 +12,7 @@ from neo4j import Driver
 from openai import OpenAI
 
 from src.config import (
+    ABSENT_TOPICS_PATH,
     ANTHROPIC_API_KEY,
     FALLBACK_MESSAGE,
     LLM_MODEL,
@@ -18,6 +20,7 @@ from src.config import (
     NEO4J_URI,
     NEO4J_USER,
     OPENAI_API_KEY,
+    RAG_IDS_CACHE_TTL,
     SCORE_THRESHOLD,
     TOP_K_DEFAULT,
 )
@@ -39,9 +42,8 @@ _ID_RE = re.compile(
 # Parenthetical acronyms (LME) → topic must appear verbatim in retrieved chunks.
 _TOPIC_ACRONYM_RE = re.compile(r'\(([A-Z]{2,6})\)')
 
-# Topics confirmed absent from corpus whose words appear incidentally in chunks.
-# Bypasses all retrieval — checked before embedding to avoid wasted compute.
-_ALWAYS_FALLBACK_TOPICS = frozenset({
+# Fallback seed: used when absent_topics.txt is missing or unreadable.
+_FALLBACK_TOPICS_SEED = frozenset({
     "méthylcellulose",
     "methylcellulose",
     "fermentation lactique",
@@ -123,6 +125,21 @@ class RAGPipeline:
         self._known_exp_ids, self._known_exp_prefixes, self._empty_exp_ids = (
             _load_experiment_ids(driver)
         )
+        self._absent_topics = _load_absent_topics()
+        self._ids_loaded_at: float = time.monotonic()
+
+    def _maybe_reload_ids(self) -> None:
+        """Reload experiment ID sets and absent topics if TTL has expired."""
+        if RAG_IDS_CACHE_TTL <= 0:
+            return
+        if time.monotonic() - self._ids_loaded_at < RAG_IDS_CACHE_TTL:
+            return
+        self._known_exp_ids, self._known_exp_prefixes, self._empty_exp_ids = (
+            _load_experiment_ids(self._driver)
+        )
+        self._absent_topics = _load_absent_topics()
+        self._ids_loaded_at = time.monotonic()
+        _log.debug("Reloaded experiment ID sets and absent topics (TTL=%ds)", RAG_IDS_CACHE_TTL)
 
     def _dense_score(self, query_vector: list[float]) -> float:
         """Average cosine similarity of top-3 chunks — more robust than top-1 alone."""
@@ -180,7 +197,8 @@ class RAGPipeline:
         top_k: int = TOP_K_DEFAULT,
         chantier: str | None = None,
     ) -> QueryResponse:
-        if any(t in question.lower() for t in _ALWAYS_FALLBACK_TOPICS):
+        self._maybe_reload_ids()
+        if any(t in question.lower() for t in self._absent_topics):
             return QueryResponse(answer=FALLBACK_MESSAGE, sources=[], found_in_corpus=False)
 
         query_vector = embed_text(self._openai, question)
@@ -267,7 +285,8 @@ class RAGPipeline:
         Consumers iterate: str → append to display; QueryResponse → final render + reset UI.
         Fallback (found_in_corpus=False) yields QueryResponse immediately with no str chunks.
         """
-        if any(t in question.lower() for t in _ALWAYS_FALLBACK_TOPICS):
+        self._maybe_reload_ids()
+        if any(t in question.lower() for t in self._absent_topics):
             yield QueryResponse(answer=FALLBACK_MESSAGE, sources=[], found_in_corpus=False)
             return
 
@@ -437,6 +456,26 @@ def _topic_in_chunks(question: str, chunks: list[dict]) -> bool:
         return True
     combined = " ".join((c.get("text") or "") for c in chunks).lower()
     return any(term.lower() in combined for term in candidates)
+
+
+def _load_absent_topics(path: str = ABSENT_TOPICS_PATH) -> frozenset[str]:
+    """Load absent-topic strings from a plain-text file (one per line, # = comment).
+
+    Falls back to _FALLBACK_TOPICS_SEED when the file is missing or unreadable,
+    so the pipeline stays operational without the data file.
+    """
+    try:
+        with open(path, encoding="utf-8") as fh:
+            topics = frozenset(
+                line.strip().lower()
+                for line in fh
+                if line.strip() and not line.startswith("#")
+            )
+        _log.debug("Loaded %d absent topics from %s", len(topics), path)
+        return topics or _FALLBACK_TOPICS_SEED
+    except OSError:
+        _log.debug("absent_topics.txt not found at %s — using seed", path)
+        return _FALLBACK_TOPICS_SEED
 
 
 def _load_experiment_ids(
