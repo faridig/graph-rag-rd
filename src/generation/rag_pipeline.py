@@ -41,7 +41,11 @@ _TOPIC_ACRONYM_RE = re.compile(r'\(([A-Z]{2,6})\)')
 
 # Topics confirmed absent from corpus whose words appear incidentally in chunks.
 # Bypasses all retrieval — checked before embedding to avoid wasted compute.
-_ALWAYS_FALLBACK_TOPICS = frozenset({"méthylcellulose", "methylcellulose"})
+_ALWAYS_FALLBACK_TOPICS = frozenset({
+    "méthylcellulose",
+    "methylcellulose",
+    "fermentation lactique",
+})
 
 # Experiment ID pattern: all-letter segments separated by hyphens, trailing 1–4 digits.
 # Matches ACE-8, DST-7, PP-REC-12, STRIP-18 — NOT S2-R4, OV-924, COULEUR-S1-3 (digits in prefix).
@@ -116,7 +120,9 @@ class RAGPipeline:
         self._openai = openai_client
         self._anthropic = anthropic_client
         self._retriever = HybridNeo4jRetriever(driver, openai_client)
-        self._known_exp_ids, self._known_exp_prefixes = _load_experiment_ids(driver)
+        self._known_exp_ids, self._known_exp_prefixes, self._empty_exp_ids = (
+            _load_experiment_ids(driver)
+        )
 
     def _dense_score(self, query_vector: list[float]) -> float:
         """Average cosine similarity of top-3 chunks — more robust than top-1 alone."""
@@ -196,7 +202,12 @@ class RAGPipeline:
             valid_ids = {r["run_id"] for r in exact_rows}
             sources = _build_sources(exact_rows, self._driver, is_exact=True)
         else:
-            if _mentions_absent_experiment(question, self._known_exp_ids, self._known_exp_prefixes):
+            if _mentions_absent_experiment(
+                question,
+                self._known_exp_ids,
+                self._known_exp_prefixes,
+                self._empty_exp_ids,
+            ):
                 return QueryResponse(answer=FALLBACK_MESSAGE, sources=[], found_in_corpus=False)
 
             # ── Hybrid search ─────────────────────────────────────────────────
@@ -272,7 +283,12 @@ class RAGPipeline:
             valid_ids = {r["run_id"] for r in exact_rows}
             sources = _build_sources(exact_rows, self._driver, is_exact=True)
         else:
-            if _mentions_absent_experiment(question, self._known_exp_ids, self._known_exp_prefixes):
+            if _mentions_absent_experiment(
+                question,
+                self._known_exp_ids,
+                self._known_exp_prefixes,
+                self._empty_exp_ids,
+            ):
                 yield QueryResponse(answer=FALLBACK_MESSAGE, sources=[], found_in_corpus=False)
                 return
 
@@ -425,16 +441,27 @@ def _topic_in_chunks(question: str, chunks: list[dict]) -> bool:
 
 def _load_experiment_ids(
     driver: Driver,
-) -> tuple[frozenset[str], frozenset[str]]:
-    """Load experiment IDs and compute known prefixes from Neo4j at pipeline startup.
+) -> tuple[frozenset[str], frozenset[str], frozenset[str]]:
+    """Load experiment IDs from Neo4j at pipeline startup.
 
-    Returns (known_ids, known_prefixes). Both are empty on failure so the pipeline
-    degrades gracefully (no false positives, absent-experiment gate disabled).
+    Returns (known_ids, known_prefixes, empty_ids).
+    - known_ids: all experiment IDs
+    - known_prefixes: letter-only prefixes (e.g. "DST", "ACE") for unknown-ID detection
+    - empty_ids: experiments that exist as nodes but have no runs or summary chunk
+      (referenced by others but file unavailable — treat as absent)
+    All sets are empty on failure so the pipeline degrades gracefully.
     """
     try:
         with driver.session() as session:
             rows = session.run(
                 "MATCH (e:Experiment) WHERE e.id <> 'REPERTOIRE-RD-2025-2026' "
+                "RETURN e.id AS eid"
+            ).data()
+            empty_rows = session.run(
+                "MATCH (e:Experiment) "
+                "WHERE e.id <> 'REPERTOIRE-RD-2025-2026' "
+                "  AND NOT (e)-[:HAS_RUN]->() "
+                "  AND NOT (e)-[:HAS_SUMMARY]->() "
                 "RETURN e.id AS eid"
             ).data()
         ids: frozenset[str] = frozenset(r["eid"] for r in rows if r.get("eid"))
@@ -443,25 +470,35 @@ def _load_experiment_ids(
             for eid in ids
             if eid.split("-")[-1].isdigit()
         )
-        return ids, prefixes
+        empty_ids: frozenset[str] = frozenset(
+            r["eid"] for r in empty_rows if r.get("eid")
+        )
+        return ids, prefixes, empty_ids
     except Exception as exc:
         _log.debug("Could not load experiment IDs at startup: %s", exc)
-        return frozenset(), frozenset()
+        return frozenset(), frozenset(), frozenset()
 
 
 def _mentions_absent_experiment(
     question: str,
     known_ids: frozenset[str],
     known_prefixes: frozenset[str],
+    empty_ids: frozenset[str],
 ) -> bool:
-    """Returns True if question names an experiment whose prefix is known but ID is absent.
+    """Returns True if question names an experiment with no data in the corpus.
 
-    Prefix must be all-letter (filters out flavor codes OV-924 and run shorthands S2-R4).
-    Only fires when known_prefixes is non-empty — safe no-op during tests with mock drivers.
+    Two cases:
+    - Prefix known but ID absent (e.g. ACE-8 where ACE-1..7 exist): pure fabrication.
+    - ID exists as node but has no runs or chunks (e.g. DST-7): referenced stub, no data.
+
+    Prefix must be all-letter — filters out flavor codes (OV-924) and run shorthands (S2-R4).
+    No-op when both sets are empty (tests with mock drivers).
     """
-    if not known_prefixes:
+    if not known_prefixes and not empty_ids:
         return False
     for pattern in _EXP_PATTERN_RE.findall(question):
+        if pattern in empty_ids:
+            return True
         parts = pattern.split("-")
         prefix = "-".join(parts[:-1])
         if prefix in known_prefixes and pattern not in known_ids:
