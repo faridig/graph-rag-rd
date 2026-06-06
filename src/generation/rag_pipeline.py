@@ -184,10 +184,17 @@ class RAGPipeline:
         return (new_chunks + chunks)[:top_k]
 
     def _verify_citations(self, answer: str, valid_ids: set[str]) -> str:
-        """Strip [source: id] markers whose id is not in valid_ids."""
+        """Strip [source: id] markers whose id is not in valid_ids.
+
+        Also accepts the local part after ':Run:' — the LLM sometimes cites
+        with the shorthand from the question (e.g. 'S2-R4') rather than the
+        full run_id ('CONSERVATEUR-VIEILLISSEMENT:Run:S2-R4').
+        """
+        short_forms = {vid.split(":Run:")[-1] for vid in valid_ids if ":Run:" in vid}
+        accepted = valid_ids | short_forms
 
         def _keep_or_drop(m: re.Match) -> str:
-            return m.group(0) if m.group(1).strip() in valid_ids else ""
+            return m.group(0) if m.group(1).strip() in accepted else ""
 
         return _CITATION_RE.sub(_keep_or_drop, answer).strip()
 
