@@ -39,30 +39,41 @@ _PRESENT = [
     "impact teneur sel absorption eau extrusion HME",
     "SME pression filière huile M03 extrusion",
     "anisotropie coupe transversale longitudinale P02",
+    # Lupin : présent dans PP-REC-12 (lupine LP90 WOA, fix regex embed_chunks)
+    "Y a-t-il des données sur l'utilisation de protéines de lupin en extrusion haute humidité ?",
 ]
 
 _ABSENT = [
-    "Pisane ES",
-    "cystéine en extrusion",
+    # In-domain (food tech, même vocabulaire) mais genuinement absents du corpus.
+    # Ces requêtes sont plus discriminantes que les off-domain : elles stressent le gate
+    # sur des concepts proches des expériences sans en être (grep _knowledge/_doc = 0).
+    "Quels essais d'extrusion HME ont été conduits avec la protéine de chanvre ?",
+    "Quel est l'impact du glucomannane de konjac sur la texture des strips végétaux ?",
+    "Résultats d'analyse microbiologique sur les émincés MDD après 21 jours en rayon ?",
+    "Quels essais de congélation-décongélation ont été réalisés sur les boulettes kefta ?",
+    "Quel effet a la teneur en zinc sur la structuration des protéines texturées HME ?",
+    # LME et méthylcellulose : passaient le dense gate, hallucinations par substitution.
+    # Couverts par le topic gate (_topic_in_chunks) dans rag_pipeline.py.
+    "Quels résultats ont été obtenus lors des essais d'extrusion basse humidité (LME) sur M03 ?",
+    "Y a-t-il des données sur l'incorporation de méthylcellulose dans les formulations extrudées ?",
+    # Off-domain : garde-fou (doivent scorer très bas)
     "ingrédient inventé XYZ123",
-    "calcium phosphate dairy",
     "polyester textile synthétique",
-    "enzyme transglutaminase",
-    "fermentation protéine",
-    "acide citrique stabilisant pH",
     "lyophilisation protéine végétale",
 ]
 
-_TOP1_CYPHER = """
-CALL db.index.vector.queryNodes('chunk_embedding', 1, $query_vector)
+# Utilise avg(top-3) — IDENTIQUE à _DENSE_GATE_CYPHER dans rag_pipeline.py.
+# Ne pas changer l'un sans changer l'autre, sinon le seuil calibré devient invalide.
+_GATE_CYPHER = """
+CALL db.index.vector.queryNodes('chunk_embedding', 3, $query_vector)
 YIELD node, score
-RETURN score
+RETURN avg(score) AS score
 """
 
 
 def _top1_score(session, client: OpenAI, query: str) -> float:
     vec = embed_text(client, query)
-    record = session.run(_TOP1_CYPHER, query_vector=vec).single()
+    record = session.run(_GATE_CYPHER, query_vector=vec).single()
     return float(record["score"]) if record else 0.0
 
 
@@ -108,7 +119,8 @@ def main() -> None:
         if max_absent >= min_present:
             print(
                 "⚠️  Distributions se chevauchent — seuil fixé à min_present - 0.01"
-                " pour garantir zéro faux négatif. Ajouter des chunks summary améliorerait la séparation."
+                " pour garantir zéro faux négatif."
+                " Ajouter des chunks summary améliorerait la séparation."
             )
 
         _update_config(suggested, min_present, max_present, min_absent, max_absent)
