@@ -502,5 +502,77 @@
     "ground_truth": "Information absente du corpus actuel.",
     "type": "absent",
     "experiment_id": null
+  },
+  {
+    "question": "Quels essais du corpus ont utilisé du psyllium comme ingrédient, et quelles observations ont été notées ?",
+    "ground_truth": "Deux essais du corpus ont utilisé du psyllium : ACE-1 et ACE-6. ACE-1 incorpore du psyllium Fibrinel PSL dans l'objectif de reproduire JUT-REC-11. Pour ACE-6 : le run ACE-6:Run:2 (Psyllium 99) n'a produit aucun effet notable, le taux d'eau a été monté à 59%. Les runs ACE-6:Run:3 et ACE-6:Run:4 (Psyllium 95) donnent une bande plus lisse mais sans feuillets séparés comme sur la P16.",
+    "type": "graph_ingredient",
+    "experiment_id": "ACE-6"
+  },
+  {
+    "question": "Dans quelles expériences du corpus a-t-on utilisé du Lorytex Snips comme TVP ?",
+    "ground_truth": "Le Lorytex Snips a été utilisé dans trois expériences : ESSAIS-NUGGETS-COEUR-TVP (14 runs), FORMULATION-SHICKEN (4 runs) et ESC-QUICK (3 runs).",
+    "type": "graph_ingredient",
+    "experiment_id": null
+  },
+  {
+    "question": "Quelles expériences ont testé du Plantfer Wheat Shred pour des formulations à base de TVP de blé ?",
+    "ground_truth": "Le Plantfer Wheat Shred a été utilisé dans plusieurs expériences : MDD-TESCO-BURGER (8 runs), BATONNET-POISSON (8 runs), ESSAIS-NUGGETS-COEUR-TVP (7 runs), TVP-HACHE (4 runs) et ESSAIS-TVP-HACHE (4 runs).",
+    "type": "graph_ingredient",
+    "experiment_id": null
+  },
+  {
+    "question": "Quelles expériences du corpus ont utilisé du Lorytex Mcm110 Fibres comme TVP de blé ?",
+    "ground_truth": "Le Lorytex Mcm110 Fibres a été utilisé dans : ESSAIS-TVP-HACHE (6 runs), BATONNET-POISSON (6 runs), TVP-HACHE (4 runs), SPICY-WINGS-GMS (1 run) et FORMULATION-SHICKEN (1 run).",
+    "type": "graph_ingredient",
+    "experiment_id": null
+  },
+  {
+    "question": "Que dit la description de l'essai STRIP-19 dans le Répertoire R&D 2025-2026, et quels résultats cet essai a-t-il produits ?",
+    "ground_truth": "Le Répertoire décrit STRIP-19 comme 'Extruder une même bande à différentes cuissons'. L'essai a mis en évidence un problème récurrent d'absorption de la marinade sur bandes non conformes. La marinade à froid (baratte prétaline) donne systématiquement une meilleure absorption que la marinade à chaud (Thermomix fécule). Trois recettes finales ont été validées : Texas Steakhouse (BBQ grillé), Gochujang (coréen) et Marinade Thaï Colin NV5.",
+    "type": "graph_details",
+    "experiment_id": "STRIP-19"
+  },
+  {
+    "question": "Le Répertoire mentionne l'essai ACE-6 sur l'ajout de psyllium. Quels résultats cet essai a-t-il produits ?",
+    "ground_truth": "ACE-6 ('Augmentation de la justosité des émincés par l'ajout de psyllium') a montré que l'ajout de psyllium ne produit pas de feuillets séparés comme sur la P16. Les bandes obtenues avec Psyllium 95 (runs 3 et 4) sont plus lisses mais sans amélioration notable de la justosité.",
+    "type": "graph_details",
+    "experiment_id": "ACE-6"
+  },
+  {
+    "question": "D'après le Répertoire, quel est l'objectif de l'essai ACE-4 sur l'effet de l'huile, et quelles conclusions ont été tirées ?",
+    "ground_truth": "ACE-4 étudie l'effet de l'huile sur la texturation sur une recette 70/30. La plus grande chute de pression se produit lors du passage 0→4% d'huile, puis l'évolution est quasi-linéaire. La SME baisse de façon linéaire avec le taux d'huile. La température matière reste stable à 127-128°C.",
+    "type": "graph_details",
+    "experiment_id": "ACE-4"
+  },
+  {
+    "question": "Quels résultats l'essai ACE-5 (recette 20/80) a-t-il produits sur l'effet de l'huile sur la texturation ?",
+    "ground_truth": "ACE-5 montre qu'en augmentant le taux d'huile, la SME, les pressions filière et contre-pression, le couple et la température matière diminuent. À partir de 14% d'huile, SME et couple se stabilisent. L'huile augmente fortement l'effet de pompage, rendant le fil de plus en plus pâteux. Sous vide, l'huile s'écoule dans le sachet au-delà de 14%.",
+    "type": "graph_details",
+    "experiment_id": "ACE-5"
+  },
+  {
+    "question": "L'essai ACE-1 est décrit comme une reproduction d'un essai antérieur. Quel essai cherche-t-il à reproduire et pourquoi ?",
+    "ground_truth": "ACE-1 vise à reproduire l'essai JUT-REC-11 (aussi désigné P16 dans les notes de run) sur l'extrudeur EV32, avec pour objectif d'augmenter l'anisotropie de la bande. JUT-REC-11 est l'essai de référence ayant démontré les meilleures propriétés d'anisotropie, mais son fichier n'est pas disponible dans le corpus actuel. Les notes de run mentionnent 'début de quelque chose ressemblant à la P16'.",
+    "type": "graph_references",
+    "experiment_id": "ACE-1"
+  },
+  {
+    "question": "Quelles expériences du corpus référencent JUT-REC-11 ?",
+    "ground_truth": "L'essai ACE-1 référence JUT-REC-11 comme expérience à reproduire sur l'extrudeur EV32.",
+    "type": "graph_references",
+    "experiment_id": null
+  },
+  {
+    "question": "Comparer les conclusions des essais ACE-4 (recette 70/30) et ACE-5 (recette 20/80) concernant l'effet du taux d'huile sur la SME et la pression filière",
+    "ground_truth": "Dans les deux essais, l'huile réduit la SME et la pression filière. ACE-4 (70/30) montre une forte chute entre 0→4% d'huile puis une évolution quasi-linéaire ; la température matière reste stable à 127-128°C. ACE-5 (20/80) montre une réduction continue jusqu'à 14% d'huile, au-delà SME et couple se stabilisent ; l'huile engendre un fort effet de pompage et un fil pâteux.",
+    "type": "comparative",
+    "experiment_id": null
+  },
+  {
+    "question": "Y a-t-il dans le corpus des essais sur les fines lamelles façon thaï, et quelles recettes ont été validées ?",
+    "ground_truth": "L'essai STRIP-19 (Essai cuisson) et le projet Fines Lamelles Thaï ont produit 3 recettes validées : Texas Steakhouse MT Mane (grillé BBQ), Gochujang Mane (coréen) et Marinade Thaï Colin NV5 (thaï). La première production industrielle de la Fines Lamelles Façon Coréenne a été réalisée le 04/03/2026.",
+    "type": "graph_ingredient",
+    "experiment_id": "STRIP-19"
   }
 ]

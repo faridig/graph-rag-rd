@@ -1,4 +1,4 @@
-"""RAG pipeline: dense gate → exact fallback → hybrid search → Claude generation."""
+"""RAG pipeline: dense gate → exact fallback → hybrid search → DeepSeek generation."""
 
 from __future__ import annotations
 
@@ -7,13 +7,12 @@ import re
 import time
 from collections.abc import Iterator
 
-import anthropic
 from neo4j import Driver
 from openai import OpenAI
 
 from src.config import (
     ABSENT_TOPICS_PATH,
-    ANTHROPIC_API_KEY,
+    DEEPSEEK_API_KEY,
     FALLBACK_MESSAGE,
     LLM_MODEL,
     NEO4J_PASSWORD,
@@ -39,7 +38,7 @@ _CITATION_RE = re.compile(r"\[source:\s*([^\]]+)\]", re.IGNORECASE)
 _TOKEN_RE = re.compile(r'[A-Za-zÀ-ÿ]{7,}')
 
 # Patterns indiquant que le LLM n'a pas trouvé la donnée dans le contexte récupéré.
-# Calibrés sur les 15 réponses AR=0.00 de l'eval v3 (2026-06-07).
+# Calibrés sur les 15 réponses AR=0.00 de l'eval v3 (2026-06-07) + DeepSeek (2026-06-08).
 _NO_DATA_PATTERNS: tuple[str, ...] = (
     "pas présent dans le contexte",
     "ne figure pas dans le contexte",
@@ -52,6 +51,9 @@ _NO_DATA_PATTERNS: tuple[str, ...] = (
     "aucune information relative à",
     "ne permettent pas de répondre à cette question",
     "n'est pas disponible dans le contexte",
+    # DeepSeek-specific phrasings (ajoutés 2026-06-08)
+    "aucune information n'est disponible",
+    "aucune donnée n'est disponible",
 )
 
 # Two shapes: hyphenated tokens (COULEUR-S1, NPT-DEV-2, 20250403-1) and bare words (Allumette).
@@ -220,11 +222,11 @@ class RAGPipeline:
         self,
         driver: Driver,
         openai_client: OpenAI,
-        anthropic_client: anthropic.Anthropic,
+        deepseek_client: OpenAI,
     ) -> None:
         self._driver = driver
         self._openai = openai_client
-        self._anthropic = anthropic_client
+        self._llm = deepseek_client
         self._retriever = HybridNeo4jRetriever(driver, openai_client)
         self._known_exp_ids, self._known_exp_prefixes, self._empty_exp_ids = (
             _load_experiment_ids(driver)
@@ -256,21 +258,18 @@ class RAGPipeline:
             return float(record["score"]) if record else 0.0
 
     def _generate(self, context: str, question: str) -> tuple[str, int, int]:
-        response = self._anthropic.messages.create(
+        response = self._llm.chat.completions.create(
             model=LLM_MODEL,
             max_tokens=2048,
-            system=SYSTEM_PROMPT,
             messages=[
-                {
-                    "role": "user",
-                    "content": f"Contexte :\n{context}\n\nQuestion : {question}",
-                }
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": f"Contexte :\n{context}\n\nQuestion : {question}"},
             ],
         )
         return (
-            response.content[0].text,
-            response.usage.input_tokens,
-            response.usage.output_tokens,
+            response.choices[0].message.content,
+            response.usage.prompt_tokens,
+            response.usage.completion_tokens,
         )
 
     def _apply_augmentation(
@@ -644,23 +643,23 @@ class RAGPipeline:
         text_chunks: list[str] = []
         in_tok = out_tok = 0
 
-        with self._anthropic.messages.stream(
+        for chunk in self._llm.chat.completions.create(
             model=LLM_MODEL,
             max_tokens=2048,
-            system=SYSTEM_PROMPT,
             messages=[
-                {
-                    "role": "user",
-                    "content": f"Contexte :\n{context}\n\nQuestion : {question}",
-                }
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": f"Contexte :\n{context}\n\nQuestion : {question}"},
             ],
-        ) as stream:
-            for chunk in stream.text_stream:
-                text_chunks.append(chunk)
-                yield chunk
-            final_msg = stream.get_final_message()
-            in_tok = final_msg.usage.input_tokens
-            out_tok = final_msg.usage.output_tokens
+            stream=True,
+            stream_options={"include_usage": True},
+        ):
+            delta = chunk.choices[0].delta.content if chunk.choices else None
+            if delta:
+                text_chunks.append(delta)
+                yield delta
+            if chunk.usage:
+                in_tok = chunk.usage.prompt_tokens
+                out_tok = chunk.usage.completion_tokens
 
         full_text = "".join(text_chunks)
 
@@ -1130,5 +1129,5 @@ def build_pipeline() -> RAGPipeline:
 
     driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
     openai_client = OpenAI(api_key=OPENAI_API_KEY)
-    anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    return RAGPipeline(driver, openai_client, anthropic_client)
+    deepseek_client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com/v1")
+    return RAGPipeline(driver, openai_client, deepseek_client)
