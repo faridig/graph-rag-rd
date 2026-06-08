@@ -33,6 +33,27 @@ from src.retrieval.sharepoint_urls import get_sharepoint_url, get_sharepoint_url
 
 _CITATION_RE = re.compile(r"\[source:\s*([^\]]+)\]", re.IGNORECASE)
 
+# Ingredient token extraction: words ≥7 alpha chars to avoid common French function words.
+# ≥5 causes false positives: ingredient names like "Beurre De Karité Comme Substitut"
+# inject "comme" into the token set, which then matches any French question.
+_TOKEN_RE = re.compile(r'[A-Za-zÀ-ÿ]{7,}')
+
+# Patterns indiquant que le LLM n'a pas trouvé la donnée dans le contexte récupéré.
+# Calibrés sur les 15 réponses AR=0.00 de l'eval v3 (2026-06-07).
+_NO_DATA_PATTERNS: tuple[str, ...] = (
+    "pas présent dans le contexte",
+    "ne figure pas dans le contexte",
+    "ne figurent pas dans le contexte",
+    "ne contient pas de",
+    "Je ne suis pas en mesure de répondre",
+    "Je ne peux pas répondre à cette question",
+    "Limites de réponse",
+    "n'est pas mentionné dans les sources",
+    "aucune information relative à",
+    "ne permettent pas de répondre à cette question",
+    "n'est pas disponible dans le contexte",
+)
+
 # Two shapes: hyphenated tokens (COULEUR-S1, NPT-DEV-2, 20250403-1) and bare words (Allumette).
 _ID_RE = re.compile(
     r'\b([0-9A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)+)'  # hyphenated: digit or letter start
@@ -82,6 +103,26 @@ _REGEN_SUFFIX = (
 # [:REFERENCES] traversal — one hop only, deduplicated by target experiment.
 # Prefers HAS_SUMMARY chunks; falls back to first HAS_CHUNK when no summary exists.
 # Without fallback, only 8/62 referenced experiments had any content (rest lacked HAS_SUMMARY).
+# Phase 1 — [:USES_INGREDIENT] traversal: question tokens → Ingredient → Run → Chunk.
+# Limited to 6 candidates (caller takes max 2) to cap token overhead.
+_INGREDIENT_CONTEXT_CYPHER = """
+MATCH (i:Ingredient)<-[:USES_INGREDIENT]-(r:Run)<-[:HAS_RUN]-(e:Experiment)
+WHERE any(token IN $tokens WHERE toLower(i.name) CONTAINS token)
+  AND NOT r.id IN $already_run_ids
+  AND e.id <> 'REPERTOIRE-RD-2025-2026'
+WITH r, e, i ORDER BY r.date DESC LIMIT 6
+OPTIONAL MATCH (r)-[:HAS_CHUNK]->(c:Chunk)
+WITH r, e, i, collect(c)[0] AS chunk
+WHERE chunk IS NOT NULL
+RETURN r.id        AS run_id,
+       e.id        AS experiment_id,
+       i.name      AS ingredient,
+       r.objective AS objective,
+       r.synthesis AS synthesis,
+       chunk.text  AS text
+LIMIT 6
+"""
+
 _REF_CONTEXT_CYPHER = """
 MATCH (e:Experiment) WHERE e.id IN $exp_ids
 MATCH (e)-[:REFERENCES]->(ref_exp:Experiment)
@@ -111,6 +152,19 @@ def extract_cited_ids(text: str) -> set[str]:
     return {m.group(1).strip() for m in _CITATION_RE.finditer(text)}
 
 
+def _is_no_data_response(answer: str) -> bool:
+    """True si le LLM signale que la donnée demandée est absente du contexte récupéré.
+
+    Garde : retourne False si des citations valides existent — une réponse
+    partielle avec [source: ...] n'est pas un refus pur, même si elle mentionne
+    qu'une partie des données est manquante.
+    """
+    if extract_cited_ids(answer):
+        return False
+    lower = answer.lower()
+    return any(p.lower() in lower for p in _NO_DATA_PATTERNS)
+
+
 class RAGPipeline:
     def __init__(
         self,
@@ -126,6 +180,7 @@ class RAGPipeline:
             _load_experiment_ids(driver)
         )
         self._absent_topics = _load_absent_topics()
+        self._ingredient_tokens = _load_ingredient_tokens(driver)
         self._ids_loaded_at: float = time.monotonic()
 
     def _maybe_reload_ids(self) -> None:
@@ -138,6 +193,7 @@ class RAGPipeline:
             _load_experiment_ids(self._driver)
         )
         self._absent_topics = _load_absent_topics()
+        self._ingredient_tokens = _load_ingredient_tokens(self._driver)
         self._ids_loaded_at = time.monotonic()
         _log.debug("Reloaded experiment ID sets and absent topics (TTL=%ds)", RAG_IDS_CACHE_TTL)
 
@@ -170,17 +226,50 @@ class RAGPipeline:
     def _apply_augmentation(
         self, chunks: list[dict], question: str, top_k: int
     ) -> list[dict]:
-        extra = _augment_chunks_from_question(self._driver, question)
+        # Experiment name patterns: tokens matching known experiment IDs that
+        # contain no digits (e.g. "Allumette"). The digit-based rule in
+        # _extract_id_patterns ignores them, but they may be the only anchor
+        # for questions like "...de l'essai Allumette".
+        tokens = {g1 or g2 for g1, g2 in _ID_RE.findall(question)}
+        exp_names = [t for t in tokens if t in self._known_exp_ids]
+
+        # Skip augmentation for digit-based patterns already satisfied by hybrid.
+        # Generic run labels like "S1-R4" appear across many experiments; if hybrid
+        # already retrieved the correct experiment's chunk, CONTAINS augmentation
+        # would inject same-label chunks from other experiments and evict the hit.
+        # Guard uses EXACT suffix match (last component after ':Run:') so that
+        # session-level patterns like "COULEUR-S1" do NOT match "COULEUR-S1-1" and
+        # still trigger augmentation to retrieve all runs in the session.
+        hybrid_run_suffixes = {
+            c.get("run_id", "").lower().rsplit(":", 1)[-1] for c in chunks
+        }
+        digit_patterns = [p for p in _extract_id_patterns(question) if len(p) >= 4]
+        uncovered = [
+            p for p in digit_patterns
+            if p.lower() not in hybrid_run_suffixes
+        ]
+        if not uncovered and not exp_names:
+            return chunks
+
+        extra = _augment_chunks_from_question(
+            self._driver, question,
+            extra_patterns=exp_names or None,
+            patterns_override=uncovered if digit_patterns else None,
+        )
         if not extra:
             return chunks
-        existing = {c["run_id"] for c in chunks}
+        # Deduplicate by text prefix — not by run_id, because multiple chunks
+        # can share a run_id (e.g. summary chunk + detail chunk for run:1) and
+        # deduplication by run_id would silently drop the detail chunk if the
+        # summary was already retrieved by the hybrid search.
+        existing = {c.get("text", "")[:100] for c in chunks}
         seen_extra: set[str] = set()
         new_chunks = []
         for c in extra:
-            rid = c["run_id"]
-            if rid not in existing and rid not in seen_extra:
+            key = c.get("text", "")[:100]
+            if key not in existing and key not in seen_extra:
                 new_chunks.append(c)
-                seen_extra.add(rid)
+                seen_extra.add(key)
         return (new_chunks + chunks)[:top_k]
 
     def _verify_citations(self, answer: str, valid_ids: set[str]) -> str:
@@ -262,6 +351,24 @@ class RAGPipeline:
             valid_ids |= {r["run_id"] for r in ref_summaries if r.get("run_id")}
             sources = _build_sources(chunks, self._driver, is_exact=False)
 
+            # Phase 1 — [:USES_INGREDIENT] traversal (MAX 2 slots, appended last)
+            ing_tokens = _detect_ingredient_tokens(question, self._ingredient_tokens)
+            if ing_tokens:
+                ing_chunks = _fetch_ingredient_context(
+                    self._driver, ing_tokens, list(valid_ids)
+                )[:2]
+                if ing_chunks:
+                    context += (
+                        "\n\n=== Essais utilisant les ingrédients mentionnés ===\n"
+                        + _format_ingredient_context(ing_chunks)
+                    )
+                    valid_ids |= {c["run_id"] for c in ing_chunks}
+                    existing_run_ids = {s.run_id for s in sources}
+                    sources += _build_sources(
+                        [c for c in ing_chunks if c["run_id"] not in existing_run_ids],
+                        self._driver, is_exact=True,
+                    )
+
         # ── Generation ────────────────────────────────────────────────────────
         answer, in_tok, out_tok = self._generate(context, question)
 
@@ -272,6 +379,9 @@ class RAGPipeline:
             in_tok += in2
             out_tok += out2
         answer = self._verify_citations(answer, valid_ids)
+
+        if _is_no_data_response(answer):
+            return QueryResponse(answer=FALLBACK_MESSAGE, sources=[], found_in_corpus=False)
 
         return QueryResponse(
             answer=answer,
@@ -339,6 +449,24 @@ class RAGPipeline:
             valid_ids |= {r["run_id"] for r in ref_summaries if r.get("run_id")}
             sources = _build_sources(chunks, self._driver, is_exact=False)
 
+            # Phase 1 — [:USES_INGREDIENT] traversal (MAX 2 slots)
+            ing_tokens = _detect_ingredient_tokens(question, self._ingredient_tokens)
+            if ing_tokens:
+                ing_chunks = _fetch_ingredient_context(
+                    self._driver, ing_tokens, list(valid_ids)
+                )[:2]
+                if ing_chunks:
+                    context += (
+                        "\n\n=== Essais utilisant les ingrédients mentionnés ===\n"
+                        + _format_ingredient_context(ing_chunks)
+                    )
+                    valid_ids |= {c["run_id"] for c in ing_chunks}
+                    existing_run_ids = {s.run_id for s in sources}
+                    sources += _build_sources(
+                        [c for c in ing_chunks if c["run_id"] not in existing_run_ids],
+                        self._driver, is_exact=True,
+                    )
+
         text_chunks: list[str] = []
         in_tok = out_tok = 0
 
@@ -369,6 +497,10 @@ class RAGPipeline:
             out_tok += out2
 
         answer = self._verify_citations(full_text, valid_ids)
+
+        if _is_no_data_response(answer):
+            yield QueryResponse(answer=FALLBACK_MESSAGE, sources=[], found_in_corpus=False)
+            return
 
         yield QueryResponse(
             answer=answer,
@@ -553,24 +685,42 @@ def _mentions_absent_experiment(
 
 
 def _extract_id_patterns(question: str) -> list[str]:
-    """Return tokens from question that look like run/experiment IDs."""
-    # findall returns tuples (group1, group2) — merge non-empty group
+    """Return tokens from question that look like run/experiment IDs.
+
+    Rule: token must contain at least one digit (all real run/experiment IDs
+    in the corpus have a digit). This excludes French compound words like
+    'observe-t-on', ingredient names like 'Flavoset', and common verbs like
+    'comparant' that the old long-word heuristic incorrectly included.
+    """
     raw = [g1 or g2 for g1, g2 in _ID_RE.findall(question)]
     result = []
     for t in raw:
-        has_hyphen = "-" in t
         has_digit = any(c.isdigit() for c in t)
-        long_word = len(t) >= 6
-        if (has_hyphen or has_digit or long_word) and len(t) >= 4:
+        if has_digit and len(t) >= 3:
             result.append(t)
     seen: set[str] = set()
     return [t for t in result if not (t.lower() in seen or seen.add(t.lower()))]  # type: ignore[func-returns-value]
 
 
 def _augment_chunks_from_question(
-    driver: Driver, question: str, max_extra: int = 6
+    driver: Driver,
+    question: str,
+    max_extra: int = 6,
+    extra_patterns: list[str] | None = None,
+    patterns_override: list[str] | None = None,
 ) -> list[dict]:
-    patterns = _extract_id_patterns(question)
+    # patterns_override replaces the internal _extract_id_patterns call so that
+    # _apply_augmentation can restrict the search to uncovered patterns only.
+    patterns = list(patterns_override) if patterns_override is not None else _extract_id_patterns(question)
+    if extra_patterns:
+        seen = {p.lower() for p in patterns}
+        for p in extra_patterns:
+            if p.lower() not in seen:
+                patterns.append(p)
+                seen.add(p.lower())
+    # Short patterns (< 4 chars) over-match via CONTAINS in the augmentation Cypher
+    # (e.g. "M03" matches "EI-DEBIT-M03002", "MDD" matches AROME-GIVAUDAN-OPT runs).
+    patterns = [p for p in patterns if len(p) >= 4]
     if not patterns:
         return []
     try:
@@ -579,6 +729,74 @@ def _augment_chunks_from_question(
     except Exception as exc:
         _log.debug("Augment lookup failed: %s", exc)
         return []
+
+
+def _load_ingredient_tokens(driver: Driver) -> frozenset[str]:
+    """Extract ≥5-char alpha tokens from all ingredient names for question matching."""
+    try:
+        with driver.session() as s:
+            rows = s.run("MATCH (i:Ingredient) RETURN toLower(i.name) AS name").data()
+        tokens: set[str] = set()
+        for r in rows:
+            for tok in _TOKEN_RE.findall(r["name"]):
+                tokens.add(tok)
+        return frozenset(tokens)
+    except Exception as exc:
+        _log.debug("Could not load ingredient tokens: %s", exc)
+        return frozenset()
+
+
+def _detect_ingredient_tokens(question: str, ingredient_tokens: frozenset[str]) -> list[str]:
+    """Return ingredient tokens that appear in the question (case-insensitive)."""
+    q_tokens = set(_TOKEN_RE.findall(question.lower()))
+    return list(q_tokens & ingredient_tokens)
+
+
+def _fetch_ingredient_context(
+    driver: Driver, tokens: list[str], already_run_ids: list[str]
+) -> list[dict]:
+    """Phase 1 — one query per token, 1 run per token, globally deduplicated.
+
+    Querying tokens independently avoids the OR across unrelated ingredients:
+    a question mentioning both 'plantfer' and 'nuggets' (product context) would
+    otherwise inject runs matching *either* term — potentially unrelated to the
+    user's intent.
+    """
+    if not tokens:
+        return []
+    results: list[dict] = []
+    seen: set[str] = set(already_run_ids)
+    try:
+        with driver.session() as s:
+            for token in tokens:
+                rows = s.run(
+                    _INGREDIENT_CONTEXT_CYPHER,
+                    tokens=[token],
+                    already_run_ids=list(seen),
+                ).data()
+                for row in rows:
+                    if row["run_id"] not in seen:
+                        results.append(row)
+                        seen.add(row["run_id"])
+                        break  # 1 run per token
+    except Exception as exc:
+        _log.debug("Ingredient context fetch failed: %s", exc)
+    return results
+
+
+def _format_ingredient_context(ing_chunks: list[dict]) -> str:
+    parts = []
+    for c in ing_chunks:
+        header = f"[Source: {c['run_id']}] [Ingrédient : {c['ingredient']}]"
+        lines = [header]
+        if c.get("objective"):
+            lines.append(f"Objectif: {c['objective']}")
+        if c.get("synthesis"):
+            lines.append(f"Synthèse: {c['synthesis']}")
+        if c.get("text"):
+            lines.append(c["text"])
+        parts.append("\n".join(lines))
+    return "\n---\n".join(parts)
 
 
 def _fetch_urls_from_neo4j(driver: Driver, exp_ids: list[str]) -> dict[str, str]:
