@@ -104,6 +104,29 @@ _REGEN_SUFFIX = (
 # Prefers HAS_SUMMARY chunks; falls back to first HAS_CHUNK when no summary exists.
 # Without fallback, only 8/62 referenced experiments had any content (rest lacked HAS_SUMMARY).
 
+# Phase 3 — Inverse [:REFERENCES] traversal: "qui référence X?" → traverse ←[:REFERENCES].
+# Triggered when question contains a "référenc" verb AND a known/empty experiment ID as target.
+_INVERSE_REF_CYPHER = """
+MATCH (e:Experiment)-[:REFERENCES]->(target:Experiment)
+WHERE target.id IN $target_ids
+  AND NOT e.id IN $already_exp_ids
+OPTIONAL MATCH (e)-[:HAS_SUMMARY]->(sum_chunk:Chunk)<-[:HAS_CHUNK]-(sum_run:Run)
+WITH e, collect(sum_chunk)[0] AS sum_chunk, collect(sum_run)[0] AS sum_run
+OPTIONAL MATCH (e)-[:HAS_RUN]->(any_run:Run)-[:HAS_CHUNK]->(any_chunk:Chunk)
+WHERE sum_chunk IS NULL
+WITH e,
+     COALESCE(sum_run, any_run)     AS run,
+     COALESCE(sum_chunk, any_chunk) AS chunk
+WHERE chunk IS NOT NULL
+RETURN e.id    AS exp_id,
+       e.title AS exp_title,
+       run.id  AS run_id,
+       chunk.text AS text
+LIMIT 6
+"""
+
+_INVERSE_REF_RE = re.compile(r'référenc', re.I)
+
 # Phase 2 — Lexical "répertoire" trigger: detect keyword + experiment IDs → direct REPERTOIRE
 # lookup + follow [:DETAILS] to full experiment. Deterministic; does not depend on hybrid results.
 _REPERTOIRE_DIRECT_CYPHER = """
@@ -343,6 +366,40 @@ class RAGPipeline:
             valid_ids = {r["run_id"] for r in exact_rows}
             sources = _build_sources(exact_rows, self._driver, is_exact=True)
         else:
+            # Phase 3 — Inverse [:REFERENCES]: "qui référence X?" bypasses absent-exp guard
+            # because the target (e.g. JUT-REC-11) may be a stub with no data, yet other
+            # experiments DO reference it and can be answered via graph traversal.
+            if _INVERSE_REF_RE.search(question):
+                target_ids = _detect_inverse_ref_targets(
+                    question, self._known_exp_ids, self._empty_exp_ids
+                )
+                if target_ids:
+                    inv_ctx = _fetch_inverse_references(self._driver, target_ids, [])
+                    if inv_ctx:
+                        inv_context = _format_inverse_ref_context(inv_ctx)
+                        inv_valid_ids = {r["run_id"] for r in inv_ctx if r.get("run_id")}
+                        inv_sources = _build_sources(inv_ctx, self._driver, is_exact=True)
+                        answer, in_tok, out_tok = self._generate(inv_context, question)
+                        cited = extract_cited_ids(answer)
+                        if not cited and FALLBACK_MESSAGE not in answer:
+                            answer, in2, out2 = self._generate(
+                                inv_context, question + _REGEN_SUFFIX
+                            )
+                            in_tok += in2
+                            out_tok += out2
+                        answer = self._verify_citations(answer, inv_valid_ids)
+                        if _is_no_data_response(answer):
+                            return QueryResponse(
+                                answer=FALLBACK_MESSAGE, sources=[], found_in_corpus=False
+                            )
+                        return QueryResponse(
+                            answer=answer,
+                            sources=inv_sources,
+                            found_in_corpus=True,
+                            input_tokens=in_tok,
+                            output_tokens=out_tok,
+                        )
+
             if _mentions_absent_experiment(
                 question,
                 self._known_exp_ids,
@@ -470,6 +527,40 @@ class RAGPipeline:
             valid_ids = {r["run_id"] for r in exact_rows}
             sources = _build_sources(exact_rows, self._driver, is_exact=True)
         else:
+            # Phase 3 — Inverse [:REFERENCES]: bypass absent-exp guard for "qui référence X?"
+            if _INVERSE_REF_RE.search(question):
+                target_ids = _detect_inverse_ref_targets(
+                    question, self._known_exp_ids, self._empty_exp_ids
+                )
+                if target_ids:
+                    inv_ctx = _fetch_inverse_references(self._driver, target_ids, [])
+                    if inv_ctx:
+                        inv_context = _format_inverse_ref_context(inv_ctx)
+                        inv_valid_ids = {r["run_id"] for r in inv_ctx if r.get("run_id")}
+                        inv_sources = _build_sources(inv_ctx, self._driver, is_exact=True)
+                        answer, in_tok, out_tok = self._generate(inv_context, question)
+                        cited = extract_cited_ids(answer)
+                        if not cited and FALLBACK_MESSAGE not in answer:
+                            answer, in2, out2 = self._generate(
+                                inv_context, question + _REGEN_SUFFIX
+                            )
+                            in_tok += in2
+                            out_tok += out2
+                        answer = self._verify_citations(answer, inv_valid_ids)
+                        if _is_no_data_response(answer):
+                            yield QueryResponse(
+                                answer=FALLBACK_MESSAGE, sources=[], found_in_corpus=False
+                            )
+                            return
+                        yield QueryResponse(
+                            answer=answer,
+                            sources=inv_sources,
+                            found_in_corpus=True,
+                            input_tokens=in_tok,
+                            output_tokens=out_tok,
+                        )
+                        return
+
             if _mentions_absent_experiment(
                 question,
                 self._known_exp_ids,
@@ -673,6 +764,53 @@ def _format_ref_context(ref_summaries: list[dict]) -> str:
         if r.get("ref_title"):
             header += f" — {r['ref_title']}"
         parts.append(f"{header}\n{r['ref_text']}")
+    return "\n---\n".join(parts)
+
+
+def _detect_inverse_ref_targets(
+    question: str,
+    known_ids: frozenset[str],
+    empty_ids: frozenset[str],
+) -> list[str]:
+    """Extract experiment IDs that are targets of an inverse reference query.
+
+    Only returns IDs that are stubs (empty_ids) or completely unknown — i.e. the
+    question asks 'who references X' where X has no data of its own.
+    Known experiments with data are not targets: the question would be answered
+    by hybrid retrieval directly.
+    """
+    targets = []
+    for pattern in _EXP_PATTERN_RE.findall(question):
+        if pattern in empty_ids or pattern not in known_ids:
+            targets.append(pattern)
+    return targets
+
+
+def _fetch_inverse_references(
+    driver: Driver, target_ids: list[str], already_exp_ids: list[str]
+) -> list[dict]:
+    """Phase 3 — traverse ←[:REFERENCES] to find experiments that reference target_ids."""
+    if not target_ids:
+        return []
+    try:
+        with driver.session() as s:
+            return s.run(
+                _INVERSE_REF_CYPHER,
+                target_ids=target_ids,
+                already_exp_ids=already_exp_ids,
+            ).data()
+    except Exception as exc:
+        _log.debug("Inverse reference fetch failed: %s", exc)
+        return []
+
+
+def _format_inverse_ref_context(inv_ctx: list[dict]) -> str:
+    parts = []
+    for r in inv_ctx:
+        header = f"[Source: {r['run_id']}] [Expérience : {r['exp_id']}]"
+        if r.get("exp_title"):
+            header += f" — {r['exp_title']}"
+        parts.append(f"{header}\n{r['text']}")
     return "\n---\n".join(parts)
 
 
