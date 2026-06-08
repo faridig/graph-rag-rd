@@ -10,53 +10,259 @@ Full spec: `docs/spec/SPEC.md`
 
 ---
 
-## Prochaine étape (2026-06-05 — reprendre ici)
+## Prochaine étape (2026-06-08 — reprendre ici)
 
-**Corpus ingéré : 2398 chunks / 2356 runs / 167 experiments — 100% embedé. SCORE_THRESHOLD recalibré à 0.6698.**
+**Corpus : 3072 chunks / 2371 runs / 170 experiments — 100% embedé. SCORE_THRESHOLD = 0.6689.**
+**Statut : V2 Graph RAG + Phase 3.5 (measure-term augmentation) implémentés. Reprendre à l'étape D.**
 
+### Métriques actuelles (eval `results/eval_custom_dst_fix_2026-06-08.json`)
+| Métrique | Valeur | Cible | Statut |
+|---|---|---|---|
+| `absent_fallback_rate` | **1.0** | 1.0 | ✅ |
+| `present_fallback_rate` | **0.0%** | 0.0 | ✅ |
+| `citation_coverage` | **97.3%** (2/75 absents) | ≥ 98% | ⚠️ |
+| `citation_validity` | **97.3%** (3/75 invalides) | ≥ 98% | ⚠️ |
+| `context_recall` | **non mesuré** (baseline: 0.818) | > 0.85 | ❓ |
+
+### À faire dans cet ordre strict
+
+#### ~~A — Eval custom V2~~ ✅ fait
+#### ~~B — Corriger ground_truths graph~~ ✅ fait (5 questions : 4 graph_details + ACE-4 vs ACE-5)
+#### ~~C — Diagnostic régression AI/DST~~ ✅ fait — Fix B appliqué (measure-term augmentation)
+
+#### D — Mesurer context_recall post-chunks ← COMMENCER ICI
+⚠️ Coût ~$1 (context_recall seul, 63 questions présentes). **Accord explicite requis avant de lancer.**
 ```bash
-# 1. STRIP-18 (L3 complexe, données instrumentales — déféré)
-docker compose up -d
-python scripts/batch_extract.py --force-complex --file "STRIP-18 Essai incorporation d'épices.xlsx"
-python -m src.ingest.import_neo4j && python -m src.ingest.embed_chunks
-
-# 2. KEFTA-LAB (traitement découpé — voir section ci-dessous)
-
-# 3. (Optionnel) Corriger les 6 hyperliens cassés dans le Répertoire SharePoint
-#    Ouvrir le fichier Répertoire → colonne K → corriger manuellement :
-#    STRIP-BOEUF/STRIPS-BOEUF, PP-18, PP-REC-12 Botanical, STRIP-B09-250415, VEILLE-4
-#    Puis relancer : python scripts/download_essais.py --dest ... --sheet "Répertoire Essais"
+rm -rf .ragas_cache/
+PYTHONPATH="." .venv/bin/python scripts/eval_rag.py \
+  --testset data/testset.json --ragas \
+  --metrics context_recall \
+  --save results/eval_context_recall_post_chunks_$(date +%Y-%m-%d).json
 ```
+Cible : context_recall > 0.85 (baseline 0.818 avant les fixes chunking + section-4 augmentation).
 
-### Problème Kefta (traitement séparé — pas encore résolu)
-`KEFTA-LAB` : 71+ runs, trop dense pour 128K tokens même en continuation.
-`_llm_raw_response.txt` (324K) présent dans `lien_essai/Essais labo boulettes kefta/`.
-Traiter manuellement ou en plusieurs appels découpés.
+#### E — Résoudre les 2 cas citation_coverage persistants (optionnel, faible impact)
+- **CONS-VIEILL-01** : question synthèse — le LLM génère des bullet points sans marqueurs inline. Limitation connue de DeepSeek sur les longues synthèses. Fix potentiel : ajouter un rappel de citation dans le prompt pour les questions contenant "synthétiser" / "résumer".
+- **Stochastique** (EI-DEBIT, PEA-REF, psyllium…) : variance ~±3% entre runs. Pas de fix structurel possible.
 
-### Données manquantes connues (2026-06-05)
-- **268 runs REPERTOIRE sans `[:DETAILS]`** — experiments non encore extraits (knowledge.json absent)
-- **45 experiments sans `HAS_SUMMARY`** — chunk synthèse manquant
-- **6 hyperliens cassés** dans le fichier Répertoire SharePoint (irrécupérable automatiquement)
+#### F — Récupérer les données manquantes (levier impact corpus)
+- Contacter Antoine : accès site `RDIndustrieCollaboration` (15+ essais industriels)
+- Contacter Yassine : DST-7 introuvable + STRIP-15/18
+- Corriger 6 hyperliens cassés dans Répertoire SharePoint (colonne K) : STRIP-BOEUF×2, PP-18, PP-REC-12 Botanical, STRIP-B09-250415, VEILLE-4
 
 ---
 
-## État d'avancement (2026-06-03)
+### Fixes appliqués (2026-06-08) — session actuelle ✅
+
+**Fix ACE-5 / RÉPERTOIRE coverage bug (`rag_pipeline.py`) :**
+Les chunks RÉPERTOIRE ont leur exp_id cible comme dernier composant de run_id (ex. `RÉPERTOIRE:Run:ACE-5`) → falsement comptés comme "ACE-5 couvert". Fix : `non_rep_chunks` exclus du calcul de couverture avant augmentation.
+
+**Fix exp_names digit filter :**
+Les IDs avec chiffres (ACE-4, ACE-5) étaient passés dans `exp_names` ET dans `digit_patterns`, causant une double requête avec LIMIT 2 qui retournait ACE-4 seulement. Fix : filtre `not any(c.isdigit() for c in t)` sur exp_names.
+
+**Phase 3.5 — Measure-term augmentation (`rag_pipeline.py`) :**
+Déclenché si `anisotropie`, `sme`, `tpa` dans la question **ou** `\b(ai|ph)\b`. Injecte le chunk `type='experiment_section'` contenant `## 4` (valeurs dérivées) pour chaque exp_id en résultats hybrides si section-4 absente. MAX 1 chunk, prépendé. Cypher : `c.experiment_id IN $exp_ids AND c.type='experiment_section' AND c.text CONTAINS '## 4'`.
+
+**Correction ground_truths (5 questions) :**
+Script `scripts/update_ground_truths.py` — mode `--show` (gratuit) + `--update TYPE` (DeepSeek). Cherry-pick manuel dans `data/testset_candidate_v2.json`. Ne jamais écraser `testset.json` directement.
+
+**Note sur la question DST/AI :**
+La section-4 (AI=3.232 pour M03 essai 3) est maintenant injectée mais le LLM ne relie pas "Run 3" à "essai 3 – condition optimale 120°C" car le chunk utilise la terminologie "essai 3" et non "Run 3". Ce mismatch de nommage dans les données source ne peut pas être corrigé côté code.
+
+---
+
+### Graph RAG V2 — implémenté (2026-06-08) ✅
+
+**Phase 0 — Audit complet :**
+- 0A : 1059/1245 ingrédients ≤ 15 runs, psyllium = 3 runs → injection directe OK. Ingrédients génériques (Nutralys 393, Eau 803) → limité à 2 slots.
+- 0B : 10 questions ingredient-centric, 5 répertoire/navigation, 0 évolution — testset pauvre en graph queries.
+- 0C : 12 questions graph ajoutées → 96 questions au total (4 graph_ingredient, 4 graph_details, 2 graph_references, 2 comparatives).
+
+**Phase 1 — `[:USES_INGREDIENT]` traversal ✅**
+Tokens ≥7 chars extraits des noms d'ingrédients (324 tokens). Détection par overlap → une requête Cypher par token (pas d'OR entre tokens) → MAX 2 chunks injectés en fin de contexte.
+
+**Phase 2 — `[:DETAILS]` traversal ✅**
+Chunks REPERTOIRE détectés dans résultats hybrid → `_fetch_details_context()` → HAS_SUMMARY de l'expérience cible injecté. Déterministe, MAX 4 chunks.
+
+**Fixes appliqués (2026-06-08) :**
+- Sources étendues après chaque traversal graphe (avec déduplication par run_id) → liens SharePoint présents dans `QueryResponse.sources`
+- Une requête Cypher par token ingredient (au lieu d'un OR global) → pas de contamination entre tokens de sens différent
+
+### Améliorations V1.1 — ✅ complétées (2026-06-08)
+
+~~Étape 1 — Diagnostic AI/DST~~ → Fix B (measure-term augmentation) appliqué.
+~~Étape 3 — Fix ciblé~~ → `_fetch_measure_sections()` + `_MEASURE_SECTION_CYPHER` dans `rag_pipeline.py`.
+
+**Ne pas implémenter le re-rank par type de chunk** sans jeu de tests couvrant les questions
+de glossaire — risque de régressions sur "qu'est-ce que le SME ?", "que signifie AI ?".
+
+---
+
+### Roadmap V2 — Graph RAG réel (après stabilisation V1.1)
+
+**Contexte :** le graphe Neo4j est peuplé ([:USES_INGREDIENT], [:DETAILS], [:REFERENCES], [:BELONGS_TO]) mais ces edges ne sont pas dans le chemin de retrieval. Le système est aujourd'hui un hybrid RAG (vector + fulltext) qui utilise Neo4j comme store — pas un Graph RAG qui raisonne sur la topologie.
+
+**Règle non négociable : une traversal à la fois, eval complète avant la suivante.**
+
+#### Phase 0 — Audit + testset (obligatoire, ~2h, à faire avant tout code)
+
+**0A — Auditer la distribution des ingredients dans Neo4j**
+```cypher
+MATCH (i:Ingredient)<-[:USES_INGREDIENT]-(r:Run)
+RETURN i.name, count(r) AS nb_runs
+ORDER BY nb_runs DESC LIMIT 20
+```
+Si un ingredient clé (psyllium, pois) apparaît dans > 15 runs → injection brute impossible, il faut un ranking. Si ≤ 15 → injection directe faisable.
+
+**0B — Classifier les 63 questions du testset par pattern de requête**
+- Ingredient-centric : "comparaison psyllium", "essais protéine pois"
+- REPERTOIRE navigation : "détails de STRIP-B09", "que dit l'essai KEFTA-12"
+- Évolution formule : "historique P01", "suite de JUT-REC-11"
+- Cross-chantier : "tous les essais extrusion basse humidité"
+
+Le pattern dominant dans les 63 questions détermine quelle Phase implémenter en premier.
+
+**0C — Ajouter 10-15 questions graph-spécifiques au testset** (`data/testset.json`)
+Sans elles, impossible de mesurer si les traversals graph améliorent quoi que ce soit.
+Exemples à créer :
+- "Quels essais ont utilisé du psyllium Fibrinel PSL sur la P01 ?"
+- "Quel est le détail de l'essai référencé par le run STRIP-B09 dans le REPERTOIRE ?"
+- "Quelles expériences ont utilisé JUT-REC-11 comme référence ?"
+- "Comparer tous les runs utilisant Nutralys F85M à 400 rpm"
+
+#### Phase 1 — [:USES_INGREDIENT] traversal (si audit 0A le justifie)
+
+**Condition d'entrée :** ingredients clés ≤ 15 runs chacun ET ≥ 5 questions testset de type ingredient.
+
+**Implémentation (3 sous-étapes distinctes) :**
+
+1. **Index ingredients au démarrage** — comme `_known_exp_ids` existe déjà :
+```python
+# RAGPipeline.__init__ ou build_pipeline()
+self._known_ingredients = _load_ingredient_names(driver)
+# {"psyllium fibrinel psl", "nutralys f85m", ...} — normalisé lowercase
+```
+
+2. **Détection dans la question** — token overlap case-insensitive sur les noms normalisés (pas de fuzzy complex, juste `.lower()` + CONTAINS sur les tokens significatifs ≥ 5 chars).
+
+3. **Cypher ciblé + slots** — les chunks ingredient arrivent **après** les chunks hybrid dans la liste, MAX 2 slots sur 6. Jamais en tête.
+
+**Validation :** eval custom sur les 10-15 nouvelles questions avant/après. Zero régression sur les 63 existantes.
+
+#### Phase 2 — [:DETAILS] traversal REPERTOIRE → Experiment (plus simple, déterministe)
+
+Si un chunk retrieval a `experiment_id == "REPERTOIRE-RD-2025-2026"` ET que son run a un edge `[:DETAILS]` → injecter automatiquement 1 chunk (section-5) de l'expérience cible.
+Pas de fuzzy matching. Logique déterministe. Implémenter après Phase 1 stabilisée.
+
+#### Phase 3 — [:REFERENCES] inverse (en dernier)
+
+"Quelles expériences référencent JUT-REC-11 ?" → traversal `<-[:REFERENCES]-`.
+Impact limité tant que les targets n'ont pas de HAS_SUMMARY (dépend des données manquantes Antoine/Yassine). Implémenter seulement si corpus enrichi.
+
+### État des évaluations (2026-06-07) — version finale V1
+
+#### Métriques custom — v8 (post-chunks) ✅
+| Métrique | v4 (avant chunks) | **v8 (après chunks)** | Cible | Statut |
+|---|---|---|---|---|
+| `absent_fallback_rate` | 100% | **100%** | 1.0 | ✅ |
+| `present_fallback_rate` | 1.6% | **1.6%** (1/63) | 0.0 | ✅ acceptable |
+| `post_llm_fallback_rate` | 1.6% | **1.6%** | — | stable |
+| `citation_coverage` | 100% | **98.4%** | 1.0 | ⚠️ régression -1.6% |
+| `citation_validity` | 97.7% | **98.3%** | 1.0 | ✅ |
+| Input tokens | 513 662 | **340 633** | — | ✅ -33% |
+
+**Régression citation_coverage :** 1 cas — AI/DST Run 3 (section-4 evincée du top-6 par les nouveaux chunks). Diagnostiquer à l'étape 1.
+**Victoire nette :** GLU-2 passe de `found_in_corpus=False` (post-LLM fallback) à réponse correcte avec 2 citations valides — directement grâce au split section-5.
+
+#### Métriques Ragas — évolution
+| Métrique | Baseline | v2 | v3 | v7 | **v8 (attendu)** | Cible |
+|---|---|---|---|---|---|---|
+| `faithfulness` | 0.71 | 0.716 | 0.790 | **0.882** | ~0.88+ | >0.85 ✅ |
+| `answer_relevancy` | 0.65 | 0.573 | 0.635 | **0.725** | à mesurer | >0.72 ✅ |
+| `context_recall` | — | — | — | **0.818** | à mesurer post-chunks | >0.85 |
+
+### Fixes appliqués (2026-06-07) — v4 ✅
+
+**Fix A — Détecteur de non-réponse post-LLM (`rag_pipeline.py`)**
+`_NO_DATA_PATTERNS` (11 patterns calibrés sur les 15 cas AR=0 de v3) + `_is_no_data_response()` avec garde `extract_cited_ids`. Actif dans `run()` et `run_stream()`. GLU-2 correctement détecté ; les 14 autres cas v3 produisent maintenant des réponses citées (LLM adapté au Fix B).
+
+**Fix B — Prompt valeurs numériques (`prompt_fr.py`)**
+Ajout à la règle 1 : "Toute valeur numérique (SME, AI, TPA, pH, score sensoriel, etc.) doit être reprise telle quelle depuis le contexte — ne jamais arrondir, inférer ou calculer." → `citation_coverage` 92.1% → 100%.
+
+**Fix C — Métriques eval (`eval_rag.py`)**
+- `post_llm_fallback_rate` : distingue fallbacks pre-LLM (gate dense) vs post-LLM (détecteur)
+- `answer_preview` (200 chars) dans `ragas_per_question` pour diagnostic croisé
+- Champ `post_llm_detected` dans chaque résultat
+
+**Tests ajoutés (`tests/test_rag.py`)** : 4 tests unitaires pour `_is_no_data_response`.
+
+### Fixes appliqués (2026-06-07) — v3 ✅
+- Fix A→E : `_extract_id_patterns` digit-only, dédup par texte, exp names sans chiffre, patch eval augment, answer_preview
+
+### Fixes appliqués (2026-06-06) ✅
+- Prompt CoT 2-étapes, `TOP_K_DEFAULT` 10→6, kwargs Ragas, SCORE_THRESHOLD 0.6682→0.6689
+- Augmentation post-retrieval, topic gate (LME acronyme, méthylcellulose 15 chars)
+- Testset : 68→84 questions, 5→21 absentes, lupin reclassé en factuelle
+
+### Gold testset — `data/testset.json` (84 paires, 2026-06-07)
+- 21 factuelles / 20 synthèses / 20 comparatives / 2 cross_experiment
+- **21 `absent`** : LME, DST-7, ACE-8, ACE-9, méthylcellulose, fermentation lactique, carraghénane, gomme xanthane, lyophilisation, spray drying + 11 IDs inexistants sous préfixes connus (FIB-5/7, STRIP-2/20, GLU-3, DST-8, NPT-DEV-3, BACON-2, PP-10, JUT-REC-4/11)
+- Ground_truth raccourcies sur `synthèse` → FactualCorrectness mécaniquement bas, pas un échec RAG
+
+⚠️ **Ne jamais lancer `--ragas` sans accord explicite** — coût ~$7/run (7 métriques × 63 questions).
+
+### Commandes de référence
+```bash
+# Eval Ragas v4 (faithfulness + answer_relevancy — VIDER LE CACHE avant)
+rm -rf .ragas_cache/
+PYTHONPATH="." .venv/bin/python scripts/eval_rag.py \
+  --testset data/testset.json --ragas \
+  --metrics faithfulness,answer_relevancy \
+  --save results/eval_ragas_priority_v4_$(date +%Y-%m-%d).json
+
+# Eval custom uniquement (sans Ragas, ~20 min, gratuit)
+PYTHONPATH="." .venv/bin/python scripts/eval_rag.py \
+  --testset data/testset.json \
+  --save results/eval_custom_$(date +%Y-%m-%d).json
+
+# Eval gold complète (accord explicite requis)
+PYTHONPATH="." .venv/bin/python scripts/eval_rag.py \
+  --testset data/testset.json --ragas \
+  --save results/eval_gold_$(date +%Y-%m-%d).json
+
+# Tâches de nettoyage optionnelles
+# 1. Supprimer scripts/_debug_strip40.py (script temp)
+# 2. Corriger 6 hyperliens cassés dans le Répertoire SharePoint (colonne K) :
+#    STRIP-BOEUF/STRIPS-BOEUF, PP-18, PP-REC-12 Botanical, STRIP-B09-250415, VEILLE-4
+```
+
+### Données manquantes connues (2026-06-08)
+- **44 stubs sans données** — experiments référencés par d'autres mais sans fichier source : DST-7, JUT-REC-4/11, codes projets (B09, M03, P03, KOBE, MDD...), rapports EI sans extraction
+- **6 hyperliens cassés** dans le fichier Répertoire SharePoint (irrécupérable automatiquement)
+- **DST-7** — référencé par 5+ expériences, fichier introuvable (contacter Yassine)
+- **STRIP-15, STRIP-18** — fichiers introuvables sur SharePoint (contacter Yassine)
+
+---
+
+## État d'avancement (2026-06-05)
 
 | Tâche | Fichier | Statut |
 |-------|---------|--------|
 | T1–T2 | `docker-compose.yml`, `requirements.txt`, `src/config.py`, `src/models.py` | ✓ |
-| T3 | `src/ingest/import_neo4j.py` | ✓ modifié |
+| T3 | `src/ingest/import_neo4j.py` | ✓ |
 | T4 | `src/ingest/create_indexes.py` | ✓ |
 | T5 | `src/ingest/embed_chunks.py` | ✓ |
 | T6 | `src/retrieval/base.py`, `src/retrieval/hybrid_retriever.py` | ✓ |
-| T7 | `src/retrieval/exact_lookup.py` | ✓ |
-| T8 | `src/generation/prompt_fr.py`, `src/generation/rag_pipeline.py` | ✓ modifié |
+| T7 | `src/retrieval/exact_lookup.py` | ✓ étendu |
+| T8 | `src/generation/prompt_fr.py`, `src/generation/rag_pipeline.py` | ✓ |
 | T8.bis | `src/ingest/calibrate_threshold.py` | ✓ |
 | T9 | `src/api.py` — FastAPI `POST /query`, `GET /health`, `GET /corpus` | ✓ |
 | T10 | `src/query.py` — CLI `python -m src.query "<question>"` | ✓ |
 | T11–T13 | `tests/` — 64 tests (test_rag, test_api, test_query_cli, test_retrieval, test_ingest) | ✓ |
 | **T14** | **`scripts/batch_extract.py`** — **pipeline d'extraction batch des fichiers bruts** | **✓ validé** |
 | **T15** | **Pipeline ingestion robuste** — auto-découverte, batch UNWIND, hash-skip, --experiment, HAS_SUMMARY | **✓** |
+| **T16** | **RAG quality** — RRF ranker, ESR=2, [:REFERENCES] traversal, run_status labels | **✓** |
+| **T17** | **Eval** — `scripts/eval_rag.py` métriques custom + Ragas optionnel | **✓** |
 
 ---
 
@@ -73,7 +279,7 @@ Traiter manuellement ou en plusieurs appels découpés.
 | `src/generation/prompt_fr.py` | Template de prompt système (français) |
 | `src/retrieval/base.py` | Interface `IRetriever` |
 | `src/retrieval/hybrid_retriever.py` | `HybridCypherRetriever` — retrieval dense+sparse via Neo4j |
-| `src/retrieval/exact_lookup.py` | Fallback Cypher `CONTAINS` quand score < SCORE_THRESHOLD |
+| `src/retrieval/exact_lookup.py` | Fallback : ingrédient CONTAINS + fulltext Lucene AND sur run.objective/synthesis/name |
 | `src/retrieval/sharepoint_urls.py` | URLs SharePoint : static fallback + parse download.log + Neo4j lookup |
 | `src/ingest/import_neo4j.py` | Import JSON → Neo4j (idempotent via MERGE) — auto-découverte knowledge files |
 | `src/ingest/create_indexes.py` | Création index fulltext + vector |
@@ -168,8 +374,10 @@ ruff format src/ tests/
 ```
 
 **[:DETAILS] — construction programmatique :**
-Extraire le segment après `:Run:` dans l'id du run REPERTOIRE → matcher sur `Experiment.id`.
-Nombre d'edges croît avec le corpus (20 au 2026-06-03). Construction automatique à chaque import_neo4j.
+Deux passes dans `build_details_relations()` :
+1. Direct : segment après `:Run:` dans l'id REPERTOIRE == `Experiment.id`
+2. `_DETAILS_OVERRIDES` dict : overrides manuels pour les cas où la normalisation Jaccard échoue (KEFTA-1→20 → KEFTA-BOULETTES-LAB, PIPE25-19/20/31→39 → MDD-EMINCE-THAI-KEBAB, KOBE-1→23 → leurs expériences détaillées).
+**265 edges [:DETAILS]** au 2026-06-05 (304 runs REPERTOIRE, 80% couverts).
 
 **Vector index:** `chunk_embedding` — 1536 dims, cosine, on `Chunk.embedding`
 
@@ -272,15 +480,23 @@ Coût batch L3 (15 fichiers) : $9.51. Coût batch L1+L2 (session 2026-06-04, ~50
 ## Retrieval Strategy
 
 **Toujours hybride** — toutes les requêtes passent par `HybridCypherRetriever` (Neo4j).
-**Fallback gate** : si `dense_score` absolu du top-1 < `SCORE_THRESHOLD` → `exact_lookup.py` (Cypher `CONTAINS toLower()`). Pas de routing conditionnel.
+**Fallback gate** : moyenne cosine similarity top-3 chunks < `SCORE_THRESHOLD` → `exact_lookup.py`. Pas de routing conditionnel.
+**exact_lookup** : deux passes — (1) ingrédient CONTAINS, (2) fulltext Lucene AND sur `run.objective + synthesis + name` (index `run_fulltext`). Mode AND : `+token1 +token2` — évite les faux positifs OR.
 
 **Filtre chantier** : deux branches — avec filtre : MATCH sur chantier + dense rank exact ; sans filtre : hybrid normal.
-**Pas de re-ranking** (corpus ~382 chunks — inutile à cette taille).
+**Ranker** : RRF naive (`_RANKER = "naive"`) + `effective_search_ratio=2` — fetch 2× candidats avant ranking. Plus robuste que linear ranker sur les requêtes mixtes nom/sémantique.
+**Pas de re-ranking** (corpus ~3072 chunks — inutile à cette taille).
 **IRetriever interface** préservée pour migration future vers un store externe.
 
-**URLs SharePoint** : `_resolve_sharepoint_url()` dans `rag_pipeline.py` — priorité : Neo4j `Experiment.sharepoint_url` → run prefix → static fallback. Batchée en 1 requête pour N sources.
+**[:REFERENCES] traversal** : après retrieval hybride, une requête Cypher 1-hop injecte les `HAS_SUMMARY` chunks des expériences référencées (si pas déjà dans les résultats). Limité à 8 chunks. Efficacité limitée : la majorité des 44 stubs sans données sont les targets des 62 `[:REFERENCES]` edges — les EI industriels et DST-7 sont présents en graphe mais sans contenu.
 
-**Idée — Enrichissement via navigation du graphe (à explorer)** : le Cypher actuel s'arrête à `Chunk → Run → Experiment`. Or 55 liens `[:REFERENCES]` existent entre expériences (ex. STRIPS-BOEUF → STRIP-3, DST-5 → DST-4). Idée : quand on trouve un Experiment, remonter automatiquement ses expériences référencées et injecter leurs chunks `[:HAS_SUMMARY]` dans le contexte Claude — pour des comparaisons inter-essais automatiques. Questions à trancher : toujours ou seulement si score élevé ? 1 ou 2 niveaux ? Risque : trop de contexte. Fichiers concernés : `_RETRIEVAL_CYPHER` dans `hybrid_retriever.py`, `_format_hybrid_context` dans `rag_pipeline.py`.
+**[:DETAILS] traversal (Phase 2)** : chunks REPERTOIRE-RD-2025-2026 détectés → `_fetch_details_context()` suit l'edge `[:DETAILS]` vers l'Experiment détaillé → injecte son `HAS_SUMMARY` (ou premier `HAS_CHUNK` si absent). MAX 4 chunks. Déterministe.
+
+**[:USES_INGREDIENT] traversal (Phase 1)** : tokens ≥7 chars extraits de la question → overlap avec 324 tokens d'ingrédients → `_fetch_ingredient_context()` → MAX 2 chunks triés par date (les plus récents). Appended en fin de contexte, jamais en tête.
+
+**URLs SharePoint** : priorité Neo4j `Experiment.sharepoint_url` → run prefix → static fallback. Batchée en 1 requête pour N sources.
+
+**run_status** : les runs `status=planned` sont annotés `[PLANIFIÉ — non réalisé]` dans le contexte et le LLM est instruit de ne pas les présenter comme acquis (prompt règle 6).
 
 ---
 
@@ -319,24 +535,17 @@ Critical test: absent ingredient must return `FALLBACK_MESSAGE` exactly, `source
 
 ---
 
-## Téléchargement des essais — Échecs connus (2026-06-03)
+## Téléchargement des essais — État (2026-06-08)
 
 Script : `python scripts/download_essais.py --dest data/repertoire_rd_2025-2026/lien_essai/lien_essai_brut --sheet "Répertoire Essais"`
 Log complet : `data/repertoire_rd_2025-2026/lien_essai/lien_essai_brut/download.log`
-État : 234 présents, **41 échecs restants**
+État : **275 présents, 2 échecs restants**
 
-### En attente des autorisations Antoine — site `RDIndustrieCollaboration` inaccessible
-Le token n'a accès qu'à `sites/RD`. Ces fichiers sont sur `sites/RDIndustrieCollaboration`.
-- `Essai industriel R&D RB 17.02.2025` / `18.02.2025`
-- `Rapport EI marinades à chaud 14.03.25`
-- `Rapport d'essai industriel 250325/250326/250327/250403 - substitution gluten`
-- `Rapport EI égrené poulet 01.09.25` / `21.08.25` / `22.09.25`
-- `Rapport EI boulette tomate 24.07.25`
-- `Essai fines lamelles Thaï`
-- `Rapport EI aug debit éminces natures.docx` / `haché burger.docx`
-- `Rapport EI eminces mdd 550 kgh.docx` / `façon kebab 550 kgh.docx`
-- `VALIDE - Rapport EI allumettes MDD 01.08.25.docx`
-- `STRIP-40`, `ACE-7`
+ℹ️ `RDIndustrieCollaboration` est accessible — tous les EI (rapports marinades, égrené poulet, allumettes MDD, éminces MDD/kebab, fines lamelles Thaï, etc.) sont téléchargés et extraits.
+
+### Échecs restants (2 fichiers)
+- `STRIP-40` — WEBURL disponible dans download.log mais résolution échoue (lien relatif cassé dans le Répertoire)
+- `ACE-7` — même problème ; fichier déjà extrait séparément depuis un autre lien
 
 ### Site `RD-Production` inaccessible (1 fichier)
 - `Essais transferts des références en TVP - onglet "Essais haché"` — GUID `DE473A9D-E2CE-4F5B-99F3-1646B0746877`
@@ -344,22 +553,31 @@ Le token n'a accès qu'à `sites/RD`. Ces fichiers sont sur `sites/RDIndustrieCo
 ### En attente de Yassine (fichiers introuvables sur SharePoint)
 - `STRIP-15 Essai huile aromatisée`
 - `STRIP-18 Essai incorporation d'épices`
-- `STRIP-19 Essai cuisson`
+- ~~`STRIP-19 Essai cuisson`~~ — ✅ téléchargé et extrait (2026-06-08)
 
 ---
 
 ## Corpus
 
-### Dans Neo4j (état 2026-06-05 — ingestion complète)
+### Dans Neo4j (état 2026-06-08)
 
-**2398 chunks / 2356 runs / 167 experiments — 100% embedé. 62 edges `[:REFERENCES]`.**
+**3072 chunks / 2371 runs / 170 experiments — 100% embedé.**
 
-| Lot | Runs | Chunks | Statut |
-|-----|------|--------|--------|
-| REPERTOIRE + tous lien_essai (127 knowledge.json) | 2356 | 2398 | ✓ ingéré + embedé |
-| STRIP-18 | — | — | ❌ pas encore extrait |
-| KEFTA-LAB | — | — | ❌ trop dense — traitement séparé |
+| Métrique | Valeur |
+|----------|--------|
+| Chunks | 3072 |
+| Runs | 2371 |
+| Experiments | 170 |
+| [:REFERENCES] edges | 62 |
+| [:DETAILS] edges | 267 |
+| Null embeddings | 0 |
+| SCORE_THRESHOLD | 0.6689 |
+| knowledge.json importés | 127 (tous) |
+| Stubs sans données | 44 (IDs référencés sans fichier source) |
 
 `_knowledge.json` → source primaire Neo4j (import + structure)
 `_documentation.md` → source de chunking pour Neo4j vector index
 `_triples.csv` → validation uniquement
+
+### Fixes embed_chunks (2026-06-05)
+- **Regex `[\w.\-]+`** au lieu de `[\w-]+` dans `_chunk_run_detail` — les run IDs avec points (`FA-5.1-A`, `PR-5.2`, etc.) étaient silencieusement ignorés. Fix : +69 chunks PP-REC-12 désormais indexés.
