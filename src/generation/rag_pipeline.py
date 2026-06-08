@@ -103,6 +103,33 @@ _REGEN_SUFFIX = (
 # [:REFERENCES] traversal — one hop only, deduplicated by target experiment.
 # Prefers HAS_SUMMARY chunks; falls back to first HAS_CHUNK when no summary exists.
 # Without fallback, only 8/62 referenced experiments had any content (rest lacked HAS_SUMMARY).
+
+# Phase 2 — Lexical "répertoire" trigger: detect keyword + experiment IDs → direct REPERTOIRE
+# lookup + follow [:DETAILS] to full experiment. Deterministic; does not depend on hybrid results.
+_REPERTOIRE_DIRECT_CYPHER = """
+MATCH (rep_run:Run)<-[:HAS_RUN]-(rep_exp:Experiment {id: 'REPERTOIRE-RD-2025-2026'})
+WHERE any(eid IN $exp_ids WHERE toUpper(rep_run.id) CONTAINS eid)
+WITH rep_run
+OPTIONAL MATCH (rep_run)-[:DETAILS]->(exp:Experiment)
+OPTIONAL MATCH (exp)-[:HAS_SUMMARY]->(sum_chunk:Chunk)<-[:HAS_CHUNK]-(sum_run:Run)
+WITH rep_run, exp, collect(sum_chunk)[0] AS sum_chunk, collect(sum_run)[0] AS sum_run
+OPTIONAL MATCH (exp)-[:HAS_RUN]->(any_run:Run)-[:HAS_CHUNK]->(any_chunk:Chunk)
+WHERE sum_chunk IS NULL
+WITH rep_run, exp,
+     COALESCE(sum_run, any_run)     AS detail_run,
+     COALESCE(sum_chunk, any_chunk) AS detail_chunk
+RETURN rep_run.id         AS rep_run_id,
+       rep_run.objective  AS rep_objective,
+       rep_run.synthesis  AS rep_synthesis,
+       exp.id             AS exp_id,
+       exp.title          AS exp_title,
+       detail_run.id      AS run_id,
+       detail_chunk.text  AS text
+LIMIT 4
+"""
+
+_REPERTOIRE_RE = re.compile(r'r[ée]pertoire', re.I)
+
 # Phase 1 — [:USES_INGREDIENT] traversal: question tokens → Ingredient → Run → Chunk.
 # Limited to 6 candidates (caller takes max 2) to cap token overhead.
 _INGREDIENT_CONTEXT_CYPHER = """
@@ -351,6 +378,30 @@ class RAGPipeline:
             valid_ids |= {r["run_id"] for r in ref_summaries if r.get("run_id")}
             sources = _build_sources(chunks, self._driver, is_exact=False)
 
+            # Phase 2 — Lexical "répertoire" trigger (deterministic, replaces passive approach)
+            if _REPERTOIRE_RE.search(question):
+                exp_ids_in_q = [
+                    p for p in _EXP_PATTERN_RE.findall(question)
+                    if p in self._known_exp_ids
+                ]
+                if exp_ids_in_q:
+                    rep_ctx = _fetch_repertoire_direct(self._driver, exp_ids_in_q)
+                    if rep_ctx:
+                        context += (
+                            "\n\n=== Description Répertoire + détails essai ===\n"
+                            + _format_repertoire_context(rep_ctx)
+                        )
+                        valid_ids |= {r["rep_run_id"] for r in rep_ctx if r.get("rep_run_id")}
+                        valid_ids |= {r["run_id"] for r in rep_ctx if r.get("run_id")}
+                        existing_run_ids = {s.run_id for s in sources}
+                        new_items = [
+                            {"run_id": r["run_id"], "experiment_id": r.get("exp_id", "")}
+                            for r in rep_ctx
+                            if r.get("run_id") and r["run_id"] not in existing_run_ids
+                        ]
+                        if new_items:
+                            sources += _build_sources(new_items, self._driver, is_exact=True)
+
             # Phase 1 — [:USES_INGREDIENT] traversal (MAX 2 slots, appended last)
             ing_tokens = _detect_ingredient_tokens(question, self._ingredient_tokens)
             if ing_tokens:
@@ -448,6 +499,30 @@ class RAGPipeline:
             valid_ids = {c["run_id"] for c in chunks}
             valid_ids |= {r["run_id"] for r in ref_summaries if r.get("run_id")}
             sources = _build_sources(chunks, self._driver, is_exact=False)
+
+            # Phase 2 — Lexical "répertoire" trigger (deterministic)
+            if _REPERTOIRE_RE.search(question):
+                exp_ids_in_q = [
+                    p for p in _EXP_PATTERN_RE.findall(question)
+                    if p in self._known_exp_ids
+                ]
+                if exp_ids_in_q:
+                    rep_ctx = _fetch_repertoire_direct(self._driver, exp_ids_in_q)
+                    if rep_ctx:
+                        context += (
+                            "\n\n=== Description Répertoire + détails essai ===\n"
+                            + _format_repertoire_context(rep_ctx)
+                        )
+                        valid_ids |= {r["rep_run_id"] for r in rep_ctx if r.get("rep_run_id")}
+                        valid_ids |= {r["run_id"] for r in rep_ctx if r.get("run_id")}
+                        existing_run_ids = {s.run_id for s in sources}
+                        new_items = [
+                            {"run_id": r["run_id"], "experiment_id": r.get("exp_id", "")}
+                            for r in rep_ctx
+                            if r.get("run_id") and r["run_id"] not in existing_run_ids
+                        ]
+                        if new_items:
+                            sources += _build_sources(new_items, self._driver, is_exact=True)
 
             # Phase 1 — [:USES_INGREDIENT] traversal (MAX 2 slots)
             ing_tokens = _detect_ingredient_tokens(question, self._ingredient_tokens)
@@ -554,6 +629,40 @@ def _fetch_reference_summaries(driver: Driver, exp_ids: list[str]) -> list[dict]
     except Exception as exc:
         _log.debug("Reference context fetch failed: %s", exc)
         return []
+
+
+def _fetch_repertoire_direct(driver: Driver, exp_ids: list[str]) -> list[dict]:
+    """Phase 2 — direct REPERTOIRE lookup for experiments mentioned in question.
+
+    Triggered lexically when the question contains 'répertoire' AND a known experiment ID.
+    Fetches the REPERTOIRE run description + follows [:DETAILS] to full experiment chunk.
+    """
+    if not exp_ids:
+        return []
+    try:
+        with driver.session() as s:
+            return s.run(_REPERTOIRE_DIRECT_CYPHER, exp_ids=exp_ids).data()
+    except Exception as exc:
+        _log.debug("Repertoire direct fetch failed: %s", exc)
+        return []
+
+
+def _format_repertoire_context(rep_ctx: list[dict]) -> str:
+    parts = []
+    for r in rep_ctx:
+        run_id = r.get("run_id") or r.get("rep_run_id", "")
+        header = f"[Source: {r['rep_run_id']}] [Répertoire → {r.get('exp_id', '')}]"
+        if r.get("exp_title"):
+            header += f" — {r['exp_title']}"
+        lines = [header]
+        if r.get("rep_objective"):
+            lines.append(f"Objectif Répertoire: {r['rep_objective']}")
+        if r.get("rep_synthesis"):
+            lines.append(f"Synthèse Répertoire: {r['rep_synthesis']}")
+        if r.get("text"):
+            lines.append(r["text"])
+        parts.append("\n".join(lines))
+    return "\n---\n".join(parts)
 
 
 def _format_ref_context(ref_summaries: list[dict]) -> str:
