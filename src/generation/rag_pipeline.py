@@ -376,7 +376,7 @@ class RAGPipeline:
                 if target_ids:
                     inv_ctx = _fetch_inverse_references(self._driver, target_ids, [])
                     if inv_ctx:
-                        inv_context = _format_inverse_ref_context(inv_ctx)
+                        inv_context = _format_inverse_ref_context(inv_ctx, target_ids)
                         inv_valid_ids = {r["run_id"] for r in inv_ctx if r.get("run_id")}
                         inv_sources = _build_sources(inv_ctx, self._driver, is_exact=True)
                         answer, in_tok, out_tok = self._generate(inv_context, question)
@@ -451,11 +451,15 @@ class RAGPipeline:
                         valid_ids |= {r["rep_run_id"] for r in rep_ctx if r.get("rep_run_id")}
                         valid_ids |= {r["run_id"] for r in rep_ctx if r.get("run_id")}
                         existing_run_ids = {s.run_id for s in sources}
-                        new_items = [
-                            {"run_id": r["run_id"], "experiment_id": r.get("exp_id", "")}
-                            for r in rep_ctx
-                            if r.get("run_id") and r["run_id"] not in existing_run_ids
-                        ]
+                        seen_new: set[str] = set()
+                        new_items: list[dict] = []
+                        for r in rep_ctx:
+                            if r.get("run_id") and r["run_id"] not in existing_run_ids | seen_new:
+                                new_items.append({"run_id": r["run_id"], "experiment_id": r.get("exp_id", "")})
+                                seen_new.add(r["run_id"])
+                            if r.get("rep_run_id") and r["rep_run_id"] not in existing_run_ids | seen_new:
+                                new_items.append({"run_id": r["rep_run_id"], "experiment_id": "REPERTOIRE-RD-2025-2026"})
+                                seen_new.add(r["rep_run_id"])
                         if new_items:
                             sources += _build_sources(new_items, self._driver, is_exact=True)
 
@@ -535,7 +539,7 @@ class RAGPipeline:
                 if target_ids:
                     inv_ctx = _fetch_inverse_references(self._driver, target_ids, [])
                     if inv_ctx:
-                        inv_context = _format_inverse_ref_context(inv_ctx)
+                        inv_context = _format_inverse_ref_context(inv_ctx, target_ids)
                         inv_valid_ids = {r["run_id"] for r in inv_ctx if r.get("run_id")}
                         inv_sources = _build_sources(inv_ctx, self._driver, is_exact=True)
                         answer, in_tok, out_tok = self._generate(inv_context, question)
@@ -607,13 +611,17 @@ class RAGPipeline:
                         valid_ids |= {r["rep_run_id"] for r in rep_ctx if r.get("rep_run_id")}
                         valid_ids |= {r["run_id"] for r in rep_ctx if r.get("run_id")}
                         existing_run_ids = {s.run_id for s in sources}
-                        new_items = [
-                            {"run_id": r["run_id"], "experiment_id": r.get("exp_id", "")}
-                            for r in rep_ctx
-                            if r.get("run_id") and r["run_id"] not in existing_run_ids
-                        ]
-                        if new_items:
-                            sources += _build_sources(new_items, self._driver, is_exact=True)
+                        seen_new_s: set[str] = set()
+                        new_items_s: list[dict] = []
+                        for r in rep_ctx:
+                            if r.get("run_id") and r["run_id"] not in existing_run_ids | seen_new_s:
+                                new_items_s.append({"run_id": r["run_id"], "experiment_id": r.get("exp_id", "")})
+                                seen_new_s.add(r["run_id"])
+                            if r.get("rep_run_id") and r["rep_run_id"] not in existing_run_ids | seen_new_s:
+                                new_items_s.append({"run_id": r["rep_run_id"], "experiment_id": "REPERTOIRE-RD-2025-2026"})
+                                seen_new_s.add(r["rep_run_id"])
+                        if new_items_s:
+                            sources += _build_sources(new_items_s, self._driver, is_exact=True)
 
             # Phase 1 — [:USES_INGREDIENT] traversal (MAX 2 slots)
             ing_tokens = _detect_ingredient_tokens(question, self._ingredient_tokens)
@@ -804,10 +812,11 @@ def _fetch_inverse_references(
         return []
 
 
-def _format_inverse_ref_context(inv_ctx: list[dict]) -> str:
+def _format_inverse_ref_context(inv_ctx: list[dict], target_ids: list[str]) -> str:
+    target_str = ", ".join(target_ids)
     parts = []
     for r in inv_ctx:
-        header = f"[Source: {r['run_id']}] [Expérience : {r['exp_id']}]"
+        header = f"[Source: {r['run_id']}] [Expérience {r['exp_id']} RÉFÉRENCE → {target_str}]"
         if r.get("exp_title"):
             header += f" — {r['exp_title']}"
         parts.append(f"{header}\n{r['text']}")
