@@ -54,6 +54,10 @@ _NO_DATA_PATTERNS: tuple[str, ...] = (
     # DeepSeek-specific phrasings (ajoutés 2026-06-08)
     "aucune information n'est disponible",
     "aucune donnée n'est disponible",
+    # Réponses négatives directes sans les mots-clés ci-dessus (ajoutés 2026-06-08)
+    "aucune donnée sur",
+    "aucune information sur",
+    "n'est pas présent dans le contexte",
 )
 
 # Two shapes: hyphenated tokens (COULEUR-S1, NPT-DEV-2, 20250403-1) and bare words (Allumette).
@@ -89,6 +93,24 @@ RETURN c.text      AS text,
        r.objective AS objective,
        r.synthesis AS synthesis
 LIMIT $limit
+"""
+
+# Measure-term augmentation: inject section-4 (## 4. Derived & computed values)
+# when AI/SME/TPA/anisotropie in question but section-4 absent from hybrid results.
+# Long tokens (≥4 chars) matched verbatim; short ones (ai, ph) need word boundaries.
+_MEASURE_TERMS = frozenset({"anisotropie", "sme", "tpa"})
+_MEASURE_TERMS_SHORT_RE = re.compile(r"\b(ai|ph)\b", re.IGNORECASE)
+
+_MEASURE_SECTION_CYPHER = """
+MATCH (c:Chunk)
+WHERE c.experiment_id IN $exp_ids
+  AND c.type = 'experiment_section'
+  AND c.text CONTAINS '## 4'
+  AND NOT c.run_id IN $already_run_ids
+RETURN c.text          AS text,
+       c.run_id        AS run_id,
+       c.experiment_id AS experiment_id
+LIMIT 1
 """
 
 _DENSE_GATE_CYPHER = """
@@ -279,8 +301,14 @@ class RAGPipeline:
         # contain no digits (e.g. "Allumette"). The digit-based rule in
         # _extract_id_patterns ignores them, but they may be the only anchor
         # for questions like "...de l'essai Allumette".
+        # IDs with digits (ACE-4, PP-16) are already handled by digit_patterns/uncovered
+        # and must NOT be passed again via exp_names — that would mix covered and
+        # uncovered experiments in a single augmentation Cypher call.
         tokens = {g1 or g2 for g1, g2 in _ID_RE.findall(question)}
-        exp_names = [t for t in tokens if t in self._known_exp_ids]
+        exp_names = [
+            t for t in tokens
+            if t in self._known_exp_ids and not any(c.isdigit() for c in t)
+        ]
 
         # Skip augmentation for digit-based patterns already satisfied by hybrid.
         # Generic run labels like "S1-R4" appear across many experiments; if hybrid
@@ -289,21 +317,35 @@ class RAGPipeline:
         # Guard uses EXACT suffix match (last component after ':Run:') so that
         # session-level patterns like "COULEUR-S1" do NOT match "COULEUR-S1-1" and
         # still trigger augmentation to retrieve all runs in the session.
+        # RÉPERTOIRE chunks are excluded from coverage: their run_id last component
+        # is the referenced experiment ID (e.g. "ACE-5"), which would falsely mark
+        # that experiment as already covered when it is not.
+        non_rep_chunks = [
+            c for c in chunks
+            if c.get("experiment_id", "") != "REPERTOIRE-RD-2025-2026"
+        ]
         hybrid_run_suffixes = {
-            c.get("run_id", "").lower().rsplit(":", 1)[-1] for c in chunks
+            c.get("run_id", "").lower().rsplit(":", 1)[-1] for c in non_rep_chunks
         }
+        hybrid_exp_ids_lower = {c.get("experiment_id", "").lower() for c in non_rep_chunks}
         digit_patterns = [p for p in _extract_id_patterns(question) if len(p) >= 4]
         uncovered = [
             p for p in digit_patterns
             if p.lower() not in hybrid_run_suffixes
+            and not any(p.lower() in eid for eid in hybrid_exp_ids_lower)
         ]
         if not uncovered and not exp_names:
             return chunks
 
+        # Cap augmentation slots so that uncovered patterns don't evict hybrid
+        # results when top_k is the total budget. For comparative questions with
+        # n uncovered experiments, allocate at most 2 slots per experiment.
+        n_aug = max(2, 2 * len(uncovered)) if uncovered else 6
         extra = _augment_chunks_from_question(
             self._driver, question,
             extra_patterns=exp_names or None,
             patterns_override=uncovered if digit_patterns else None,
+            max_extra=n_aug,
         )
         if not extra:
             return chunks
@@ -417,6 +459,22 @@ class RAGPipeline:
                     sources=[],
                     found_in_corpus=False,
                 )
+            # Measure-term augmentation: prepend section-4 chunk (MAX 1) when
+            # AI/SME/TPA/anisotropie in question and no section-4 in hybrid results.
+            _ql = question.lower()
+            if any(t in _ql for t in _MEASURE_TERMS) or _MEASURE_TERMS_SHORT_RE.search(_ql):
+                _meas_exp_ids = list({
+                    c["experiment_id"] for c in chunks
+                    if c.get("experiment_id") and c["experiment_id"] != "REPERTOIRE-RD-2025-2026"
+                })
+                if _meas_exp_ids and not any("## 4" in (c.get("text") or "") for c in chunks):
+                    _meas = _fetch_measure_sections(
+                        self._driver, _meas_exp_ids,
+                        [c["run_id"] for c in chunks if c.get("run_id")],
+                    )
+                    if _meas:
+                        chunks = _meas[:1] + chunks
+
             exp_ids = list({c["experiment_id"] for c in chunks if c.get("experiment_id")})
             ref_summaries = [
                 r for r in _fetch_reference_summaries(self._driver, exp_ids)
@@ -579,6 +637,21 @@ class RAGPipeline:
             if not chunks or not _topic_in_chunks(question, chunks):
                 yield QueryResponse(answer=FALLBACK_MESSAGE, sources=[], found_in_corpus=False)
                 return
+            # Measure-term augmentation (same logic as run())
+            _ql = question.lower()
+            if any(t in _ql for t in _MEASURE_TERMS) or _MEASURE_TERMS_SHORT_RE.search(_ql):
+                _meas_exp_ids = list({
+                    c["experiment_id"] for c in chunks
+                    if c.get("experiment_id") and c["experiment_id"] != "REPERTOIRE-RD-2025-2026"
+                })
+                if _meas_exp_ids and not any("## 4" in (c.get("text") or "") for c in chunks):
+                    _meas = _fetch_measure_sections(
+                        self._driver, _meas_exp_ids,
+                        [c["run_id"] for c in chunks if c.get("run_id")],
+                    )
+                    if _meas:
+                        chunks = _meas[:1] + chunks
+
             exp_ids = list({c["experiment_id"] for c in chunks if c.get("experiment_id")})
             ref_summaries = [
                 r for r in _fetch_reference_summaries(self._driver, exp_ids)
@@ -1005,6 +1078,43 @@ def _detect_ingredient_tokens(question: str, ingredient_tokens: frozenset[str]) 
     """Return ingredient tokens that appear in the question (case-insensitive)."""
     q_tokens = set(_TOKEN_RE.findall(question.lower()))
     return list(q_tokens & ingredient_tokens)
+
+
+def _fetch_measure_sections(
+    driver: Driver, exp_ids: list[str], already_run_ids: list[str]
+) -> list[dict]:
+    """Fetch section-4 (## 4. Derived & computed values) for the given experiments.
+
+    Called when a measure term (AI, SME, TPA, anisotropie) is in the question but no
+    section-4 chunk appears in the hybrid results. Returns at most 1 chunk.
+    """
+    if not exp_ids:
+        return []
+    try:
+        with driver.session() as s:
+            rows = s.run(
+                _MEASURE_SECTION_CYPHER,
+                exp_ids=exp_ids,
+                already_run_ids=already_run_ids,
+            ).data()
+    except Exception as exc:
+        _log.debug("Measure section fetch failed: %s", exc)
+        return []
+    return [
+        {
+            "text": r["text"],
+            "run_id": r["run_id"],
+            "experiment_id": r["experiment_id"],
+            "score": 0.0,
+            "run_status": None,
+            "objective": None,
+            "synthesis": None,
+            "date": None,
+            "ingredients": [],
+            "chantier": None,
+        }
+        for r in rows
+    ]
 
 
 def _fetch_ingredient_context(
