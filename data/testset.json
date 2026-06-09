@@ -517,7 +517,7 @@
   },
   {
     "question": "Quelles expériences ont testé du Plantfer Wheat Shred pour des formulations à base de TVP de blé ?",
-    "ground_truth": "Le Plantfer Wheat Shred a été utilisé dans plusieurs expériences : MDD-TESCO-BURGER (8 runs), BATONNET-POISSON (8 runs), ESSAIS-NUGGETS-COEUR-TVP (7 runs), TVP-HACHE (4 runs) et ESSAIS-TVP-HACHE (4 runs).",
+    "ground_truth": "Le Plantfer Wheat Shred a été utilisé dans plusieurs expériences : BATONNET-POISSON (8 runs), ESSAIS-NUGGETS-COEUR-TVP (7 runs), TVP-HACHE (4 runs) et ESSAIS-TVP-HACHE (4 runs). Une variante, le Plantfer Wheat Small Shred, a été utilisée dans ESSAIS-NUGGETS-LECLERC (12 runs) et MDD-TESCO-BURGER (8 runs).",
     "type": "graph_ingredient",
     "experiment_id": null
   },
@@ -571,7 +571,7 @@
   },
   {
     "question": "Y a-t-il dans le corpus des essais sur les fines lamelles façon thaï, et quelles recettes ont été validées ?",
-    "ground_truth": "L'essai STRIP-19 (Essai cuisson) et le projet Fines Lamelles Thaï ont produit 3 recettes validées : Texas Steakhouse MT Mane (grillé BBQ), Gochujang Mane (coréen) et Marinade Thaï Colin NV5 (thaï). La première production industrielle de la Fines Lamelles Façon Coréenne a été réalisée le 04/03/2026.",
+    "ground_truth": "Oui, le corpus contient l'essai FINES-LAMELLES-THAI-1 (premier essai industriel Fines Lamelles Façon Thaï – Strips de bœuf, P002). Le développement aromatique a été conduit dans l'essai STRIP-19 avec 3 saveurs validées : Texas Steakhouse MT Mane (grillé BBQ), Gochujang Mane (coréen) et Marinade Thaï Colin NV5 (thaï). La première production industrielle de la Fines Lamelles Façon Coréenne a été réalisée le 04/03/2026.",
     "type": "graph_ingredient",
     "experiment_id": "STRIP-19"
   }

@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 from src.config import FALLBACK_MESSAGE, SCORE_THRESHOLD
 from src.generation.rag_pipeline import (
     RAGPipeline,
+    _detect_session_prefixes,
     _format_ingredient_aggregate,
     _is_aggregate_ingredient_query,
     extract_cited_ids,
@@ -389,3 +390,25 @@ def test_format_ingredient_aggregate_empty_sample_runs():
     assert "TEST-EXP" in result
     assert "2 runs" in result
     assert "—" in result
+
+
+# ── Phase 1.5 — Session prefix detection ─────────────────────────────────────
+
+
+def test_detect_session_prefixes_finds_kobe():
+    pfxs = _detect_session_prefixes("Dans la session COULEUR-S1, quel run a obtenu le meilleur score ?")
+    assert "COULEUR-S1" in pfxs
+
+
+def test_detect_session_prefixes_strips_run_suffix():
+    pfxs = _detect_session_prefixes("Comparer COULEUR-S1-3 (Malt 0.20%) et COULEUR-S1-4 (Malt 0.25%)")
+    assert "COULEUR-S1" in pfxs
+    assert len(pfxs) == 1  # deduplicated
+
+
+def test_detect_session_prefixes_empty_on_plain_question():
+    assert _detect_session_prefixes("Quel est l'effet du SME sur ACE-5 ?") == []
+
+
+def test_detect_session_prefixes_empty_on_experiment_id():
+    assert _detect_session_prefixes("Quels sont les résultats de STRIP-19 ?") == []

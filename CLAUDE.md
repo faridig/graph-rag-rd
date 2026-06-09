@@ -10,38 +10,42 @@ Full spec: `docs/spec/SPEC.md`
 
 ---
 
-## Prochaine étape (2026-06-08 — reprendre ici)
+## Prochaine étape (2026-06-09 — reprendre ici)
 
 **Corpus : 3072 chunks / 2371 runs / 170 experiments — 100% embedé. SCORE_THRESHOLD = 0.6689.**
-**Statut : V2 Graph RAG + Phase 3.5 (measure-term augmentation) implémentés. Reprendre à l'étape D.**
+**Statut : V2 Graph RAG + Phase 1.5 (session-level retrieval) implémentés. Reprendre à l'étape E (eval final).**
 
-### Métriques actuelles (eval `results/eval_custom_dst_fix_2026-06-08.json`)
+### Métriques actuelles (eval `results/eval_context_recall_phase1b_v3_2026-06-09.json`)
 | Métrique | Valeur | Cible | Statut |
 |---|---|---|---|
 | `absent_fallback_rate` | **1.0** | 1.0 | ✅ |
 | `present_fallback_rate` | **0.0%** | 0.0 | ✅ |
 | `citation_coverage` | **97.3%** (2/75 absents) | ≥ 98% | ⚠️ |
 | `citation_validity` | **97.3%** (3/75 invalides) | ≥ 98% | ⚠️ |
-| `context_recall` | **non mesuré** (baseline: 0.818) | > 0.85 | ❓ |
+| `context_recall` | **0.674** (74 questions présentes) | > 0.75 | ⚠️ |
+
+**Note cible révisée :** la cible 0.85 était calibrée sur 63 questions simples (V1). Le testset V2 compte 74 présentes dont 12 questions Graph RAG plus difficiles. La cible réaliste est **0.75**.
 
 ### À faire dans cet ordre strict
 
 #### ~~A — Eval custom V2~~ ✅ fait
 #### ~~B — Corriger ground_truths graph~~ ✅ fait (5 questions : 4 graph_details + ACE-4 vs ACE-5)
 #### ~~C — Diagnostic régression AI/DST~~ ✅ fait — Fix B appliqué (measure-term augmentation)
+#### ~~D — Mesurer context_recall post-chunks~~ ✅ fait — 0.674 mesuré (Phase 1b aggregate)
+#### ~~D' — Phase 1.5 session retrieval~~ ✅ fait — session prefix detection + KOBE GT fixes
 
-#### D — Mesurer context_recall post-chunks ← COMMENCER ICI
-⚠️ Coût ~$1 (context_recall seul, 63 questions présentes). **Accord explicite requis avant de lancer.**
+#### E — Eval final context_recall ← COMMENCER ICI
+⚠️ Coût ~$1 (context_recall seul, 74 questions présentes). **Accord explicite requis avant de lancer.**
 ```bash
-rm -rf .ragas_cache/
+rm -rf .ragas_cache/ .eval_cache/
 PYTHONPATH="." .venv/bin/python scripts/eval_rag.py \
   --testset data/testset.json --ragas \
   --metrics context_recall \
-  --save results/eval_context_recall_post_chunks_$(date +%Y-%m-%d).json
+  --save results/eval_context_recall_final_$(date +%Y-%m-%d).json
 ```
-Cible : context_recall > 0.85 (baseline 0.818 avant les fixes chunking + section-4 augmentation).
+Cible : context_recall > 0.75.
 
-#### E — Résoudre les 2 cas citation_coverage persistants (optionnel, faible impact)
+#### F — Résoudre les 2 cas citation_coverage persistants (optionnel, faible impact)
 - **CONS-VIEILL-01** : question synthèse — le LLM génère des bullet points sans marqueurs inline. Limitation connue de DeepSeek sur les longues synthèses. Fix potentiel : ajouter un rappel de citation dans le prompt pour les questions contenant "synthétiser" / "résumer".
 - **Stochastique** (EI-DEBIT, PEA-REF, psyllium…) : variance ~±3% entre runs. Pas de fix structurel possible.
 

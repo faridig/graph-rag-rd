@@ -475,10 +475,20 @@ def _run_eval(
             captured_contexts.append(rp._format_ingredient_aggregate(rows))
         return rows
 
+    # Capture Phase 1.5 session context — formatted string injected directly into prompt.
+    orig_fetch_session = rp._fetch_session_context
+
+    def _patched_fetch_session(driver: Any, prefixes: list) -> list[dict]:
+        rows = orig_fetch_session(driver, prefixes)
+        if rows:
+            captured_contexts.append(rp._format_session_context(rows))
+        return rows
+
     pipeline._retriever.search = _patched_search
     rp._fetch_reference_summaries = _patched_fetch_ref
     rp._augment_chunks_from_question = _patched_augment
     rp._fetch_ingredient_aggregate = _patched_fetch_agg
+    rp._fetch_session_context = _patched_fetch_session
 
     try:
         t0 = time.monotonic()
@@ -489,6 +499,7 @@ def _run_eval(
         rp._fetch_reference_summaries = orig_fetch_ref
         rp._augment_chunks_from_question = orig_augment
         rp._fetch_ingredient_aggregate = orig_fetch_agg
+        rp._fetch_session_context = orig_fetch_session
 
     cited_ids = rp.extract_cited_ids(resp.answer)
     valid_ids = {s.run_id for s in (resp.sources or [])}

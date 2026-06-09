@@ -225,6 +225,25 @@ _AGGREGATE_INGREDIENT_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Phase 1.5 — Session-level context fetch.
+# Detects explicit session prefixes (COULEUR-S1, GOUT-S2, etc.) in the question
+# and fetches ALL run chunks from those sessions, bypassing the top_k cap.
+# Pattern: uppercase letters + optional alphanumeric groups + "-S" + digits,
+# optionally followed by a run-number suffix (-3, -4) that gets stripped to the prefix.
+_SESSION_PREFIX_RE = re.compile(
+    r'\b([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-S\d+)(?:-\d+)?\b'
+)
+
+_SESSION_CONTEXT_CYPHER = """
+MATCH (e:Experiment)-[:HAS_RUN]->(r:Run)-[:HAS_CHUNK]->(c:Chunk)
+WHERE any(pfx IN $prefixes WHERE r.id STARTS WITH pfx)
+  AND e.id <> 'REPERTOIRE-RD-2025-2026'
+RETURN r.id AS run_id, e.id AS experiment_id, c.text AS text,
+       c.type AS chunk_type, e.title AS experiment_title
+ORDER BY r.id, c.type
+LIMIT 30
+"""
+
 _REF_CONTEXT_CYPHER = """
 MATCH (e:Experiment) WHERE e.id IN $exp_ids
 MATCH (e)-[:REFERENCES]->(ref_exp:Experiment)
@@ -584,6 +603,26 @@ class RAGPipeline:
                         self._driver, is_exact=True,
                     )
 
+            # Phase 1.5 — Session-level context (KOBE-style multi-run session questions).
+            # Fires when the question explicitly names a session prefix like COULEUR-S1.
+            # Fetches ALL run chunks in those sessions, bypassing the top_k cap.
+            session_pfxs = _detect_session_prefixes(question)
+            if session_pfxs:
+                sess_chunks = _fetch_session_context(self._driver, session_pfxs)
+                already = {c.get("text", "")[:80] for c in chunks}
+                fresh = [c for c in sess_chunks if c.get("text", "")[:80] not in already]
+                if fresh:
+                    context += (
+                        "\n\n=== Données de session (tous les runs de la session) ===\n"
+                        + _format_session_context(fresh)
+                    )
+                    valid_ids |= {c["run_id"] for c in fresh if c.get("run_id")}
+                    existing_run_ids = {s.run_id for s in sources}
+                    sources += _build_sources(
+                        [c for c in fresh if c.get("run_id") and c["run_id"] not in existing_run_ids],
+                        self._driver, is_exact=True,
+                    )
+
         # ── Generation ────────────────────────────────────────────────────────
         answer, in_tok, out_tok = self._generate(context, question)
 
@@ -774,6 +813,24 @@ class RAGPipeline:
                     existing_run_ids = {s.run_id for s in sources}
                     sources += _build_sources(
                         [c for c in ing_chunks if c["run_id"] not in existing_run_ids],
+                        self._driver, is_exact=True,
+                    )
+
+            # Phase 1.5 — Session-level context (mirror of run())
+            session_pfxs = _detect_session_prefixes(question)
+            if session_pfxs:
+                sess_chunks = _fetch_session_context(self._driver, session_pfxs)
+                already = {c.get("text", "")[:80] for c in chunks}
+                fresh = [c for c in sess_chunks if c.get("text", "")[:80] not in already]
+                if fresh:
+                    context += (
+                        "\n\n=== Données de session (tous les runs de la session) ===\n"
+                        + _format_session_context(fresh)
+                    )
+                    valid_ids |= {c["run_id"] for c in fresh if c.get("run_id")}
+                    existing_run_ids = {s.run_id for s in sources}
+                    sources += _build_sources(
+                        [c for c in fresh if c.get("run_id") and c["run_id"] not in existing_run_ids],
                         self._driver, is_exact=True,
                     )
 
@@ -1290,6 +1347,34 @@ def _format_ingredient_aggregate(rows: list[dict]) -> str:
             )
         parts.append("\n".join(lines))
     return "\n\n".join(parts)
+
+
+def _detect_session_prefixes(question: str) -> list[str]:
+    """Extract deduplicated session prefixes (e.g. COULEUR-S1) from the question."""
+    return list({m.group(1).upper() for m in _SESSION_PREFIX_RE.finditer(question)})
+
+
+def _fetch_session_context(driver: Driver, prefixes: list[str]) -> list[dict]:
+    """Phase 1.5 — fetch all run chunks belonging to the detected session prefixes."""
+    if not prefixes:
+        return []
+    try:
+        with driver.session() as s:
+            return s.run(_SESSION_CONTEXT_CYPHER, prefixes=prefixes).data()
+    except Exception as exc:
+        _log.debug("Session context fetch failed: %s", exc)
+        return []
+
+
+def _format_session_context(chunks: list[dict]) -> str:
+    """Format session chunks grouped by run_id, sorted for readability."""
+    by_run: dict[str, list[str]] = {}
+    for c in chunks:
+        by_run.setdefault(c["run_id"], []).append(c["text"])
+    lines = []
+    for run_id, texts in sorted(by_run.items()):
+        lines.append(f"--- Run {run_id} ---\n" + "\n".join(texts))
+    return "\n\n".join(lines)
 
 
 def _fetch_urls_from_neo4j(driver: Driver, exp_ids: list[str]) -> dict[str, str]:
