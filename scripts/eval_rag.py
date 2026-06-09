@@ -80,6 +80,8 @@ _PIPELINE_SOURCES = [
     _PROJECT_ROOT / "src/generation/prompt_fr.py",
     _PROJECT_ROOT / "src/retrieval/hybrid_retriever.py",
     _PROJECT_ROOT / "src/config.py",
+    # eval_rag.py itself: patching logic determines retrieved_contexts content.
+    Path(__file__),
 ]
 
 
