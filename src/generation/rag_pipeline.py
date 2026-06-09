@@ -37,6 +37,13 @@ _CITATION_RE = re.compile(r"\[source:\s*([^\]]+)\]", re.IGNORECASE)
 # inject "comme" into the token set, which then matches any French question.
 _TOKEN_RE = re.compile(r'[A-Za-zÀ-ÿ]{7,}')
 
+# French common words that appear in some ingredient names but are not product identifiers.
+# Without this guard, a question mentioning "formulations" triggers VEILLE-4 (ingredient named
+# "Note: Deux Formulations De Marinade Testées En Parallèle") as a false positive.
+_INGREDIENT_STOPWORDS = frozenset({
+    'formulations', 'parallèle', 'testées', 'testés',
+})
+
 # Patterns indiquant que le LLM n'a pas trouvé la donnée dans le contexte récupéré.
 # Calibrés sur les 15 réponses AR=0.00 de l'eval v3 (2026-06-07) + DeepSeek (2026-06-08).
 _NO_DATA_PATTERNS: tuple[str, ...] = (
@@ -1134,7 +1141,7 @@ def _load_ingredient_tokens(driver: Driver) -> frozenset[str]:
 def _detect_ingredient_tokens(question: str, ingredient_tokens: frozenset[str]) -> list[str]:
     """Return ingredient tokens that appear in the question (case-insensitive)."""
     q_tokens = set(_TOKEN_RE.findall(question.lower()))
-    return list(q_tokens & ingredient_tokens)
+    return [t for t in q_tokens & ingredient_tokens if t not in _INGREDIENT_STOPWORDS]
 
 
 def _fetch_measure_sections(
@@ -1226,6 +1233,16 @@ def _is_aggregate_ingredient_query(question: str) -> bool:
     return bool(_AGGREGATE_INGREDIENT_RE.search(question))
 
 
+def _is_valid_ingredient_name(name: str) -> bool:
+    """Reject data-entry artifacts masquerading as ingredient names.
+
+    Some knowledge.json files stored notes or compound labels as ingredient names:
+    '/' separates two alternatives, 'Note:' prefixes a free-text remark.
+    These produce noise in the aggregate and should be excluded.
+    """
+    return '/' not in name and not name.lower().startswith('note')
+
+
 def _fetch_ingredient_aggregate(driver: Driver, tokens: list[str]) -> list[dict]:
     """Phase 1b — per-token aggregate query: experiment × ingredient × run count.
 
@@ -1234,7 +1251,7 @@ def _fetch_ingredient_aggregate(driver: Driver, tokens: list[str]) -> list[dict]
     """
     if not tokens:
         return []
-    seen_exp: set[str] = set()
+    seen_exp: set[tuple[str, str]] = set()
     results: list[dict] = []
     try:
         with driver.session() as s:
@@ -1244,6 +1261,8 @@ def _fetch_ingredient_aggregate(driver: Driver, tokens: list[str]) -> list[dict]
                     tokens=[token],
                 ).data()
                 for row in rows:
+                    if not _is_valid_ingredient_name(row["ingredient"]):
+                        continue
                     key = (row["experiment_id"], row["ingredient"])
                     if key not in seen_exp:
                         results.append(row)
