@@ -236,7 +236,9 @@ _SESSION_PREFIX_RE = re.compile(
 
 _SESSION_CONTEXT_CYPHER = """
 MATCH (e:Experiment)-[:HAS_RUN]->(r:Run)-[:HAS_CHUNK]->(c:Chunk)
-WHERE any(pfx IN $prefixes WHERE r.id STARTS WITH pfx)
+WHERE any(pfx IN $prefixes
+    WHERE r.id CONTAINS (':Run:' + pfx + '-')
+       OR r.id ENDS WITH (':Run:' + pfx))
   AND e.id <> 'REPERTOIRE-RD-2025-2026'
 RETURN r.id AS run_id, e.id AS experiment_id, c.text AS text,
        c.type AS chunk_type, e.title AS experiment_title
