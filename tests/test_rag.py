@@ -5,7 +5,13 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from src.config import FALLBACK_MESSAGE, SCORE_THRESHOLD
-from src.generation.rag_pipeline import RAGPipeline, extract_cited_ids, run_query
+from src.generation.rag_pipeline import (
+    RAGPipeline,
+    _format_ingredient_aggregate,
+    _is_aggregate_ingredient_query,
+    extract_cited_ids,
+    run_query,
+)
 
 _FAKE_CHUNK = {
     "run_id": "ACE-5:Run:1",
@@ -326,3 +332,60 @@ def test_apply_augmentation_repertoire_not_counted_as_covered():
     assert result[0]["run_id"] == "ACE-5:Run:11", (
         f"ACE-5 chunk doit être en position 0. Got: {result[0]['run_id']}"
     )
+
+
+# ── Phase 1b — Aggregate ingredient query detection and formatting ─────────────
+
+def test_is_aggregate_ingredient_query_detects_patterns():
+    assert _is_aggregate_ingredient_query("Dans quelles expériences a-t-on utilisé du Lorytex Snips ?")
+    assert _is_aggregate_ingredient_query("Quelles expériences ont testé du Plantfer Wheat Shred ?")
+    assert _is_aggregate_ingredient_query("Quels essais du corpus ont utilisé du psyllium ?")
+    assert _is_aggregate_ingredient_query("dans quelles exp ont utilisé le lupin")
+
+
+def test_is_aggregate_ingredient_query_rejects_non_aggregate():
+    assert not _is_aggregate_ingredient_query("Quel est l'effet du psyllium sur la texture ?")
+    assert not _is_aggregate_ingredient_query("Quelle SME a été mesurée lors du Run 3 ?")
+    assert not _is_aggregate_ingredient_query("Comparer ACE-4 et ACE-5 sur l'huile")
+
+
+def test_format_ingredient_aggregate_basic():
+    rows = [
+        {
+            "experiment_id": "ESSAIS-NUGGETS-COEUR-TVP",
+            "experiment_title": "Essais nuggets",
+            "ingredient": "Lorytex Snips",
+            "nb_runs": 14,
+            "sample_run_ids": ["E4", "E5", "E6"],
+        },
+        {
+            "experiment_id": "FORMULATION-SHICKEN",
+            "experiment_title": None,
+            "ingredient": "Lorytex Snips",
+            "nb_runs": 4,
+            "sample_run_ids": ["S1"],
+        },
+    ]
+    result = _format_ingredient_aggregate(rows)
+    assert "Lorytex Snips" in result
+    assert "ESSAIS-NUGGETS-COEUR-TVP" in result
+    assert "14 runs" in result
+    assert "FORMULATION-SHICKEN" in result
+    assert "4 runs" in result
+    assert "E4, E5, E6" in result
+
+
+def test_format_ingredient_aggregate_empty_sample_runs():
+    rows = [
+        {
+            "experiment_id": "TEST-EXP",
+            "experiment_title": "Test",
+            "ingredient": "SomeIngredient",
+            "nb_runs": 2,
+            "sample_run_ids": [],
+        }
+    ]
+    result = _format_ingredient_aggregate(rows)
+    assert "TEST-EXP" in result
+    assert "2 runs" in result
+    assert "—" in result

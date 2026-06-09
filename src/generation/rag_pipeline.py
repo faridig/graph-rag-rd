@@ -197,6 +197,27 @@ RETURN r.id        AS run_id,
 LIMIT 6
 """
 
+# Phase 1b — [:USES_INGREDIENT] aggregate traversal for "quelles expériences ont utilisé X?"
+# Returns experiment-level counts instead of individual run chunks.
+_INGREDIENT_AGGREGATE_CYPHER = """
+MATCH (i:Ingredient)<-[:USES_INGREDIENT]-(r:Run)<-[:HAS_RUN]-(e:Experiment)
+WHERE any(token IN $tokens WHERE toLower(i.name) CONTAINS token)
+  AND e.id <> 'REPERTOIRE-RD-2025-2026'
+WITH e, i, count(r) AS nb_runs, collect(r.id)[0..3] AS sample_run_ids
+RETURN e.id        AS experiment_id,
+       e.title     AS experiment_title,
+       i.name      AS ingredient,
+       nb_runs,
+       sample_run_ids
+ORDER BY nb_runs DESC
+"""
+
+# Regex detecting "which experiments used X" intent.
+_AGGREGATE_INGREDIENT_RE = re.compile(
+    r'quell?es?\s+exp[eé]riences|quels?\s+essais\b|dans\s+quell?es?\s+exp',
+    re.IGNORECASE,
+)
+
 _REF_CONTEXT_CYPHER = """
 MATCH (e:Experiment) WHERE e.id IN $exp_ids
 MATCH (e)-[:REFERENCES]->(ref_exp:Experiment)
@@ -520,9 +541,27 @@ class RAGPipeline:
                         if new_items:
                             sources += _build_sources(new_items, self._driver, is_exact=True)
 
-            # Phase 1 — [:USES_INGREDIENT] traversal (MAX 2 slots, appended last)
+            # Phase 1 — [:USES_INGREDIENT] traversal
             ing_tokens = _detect_ingredient_tokens(question, self._ingredient_tokens)
             if ing_tokens:
+                # Phase 1b — aggregate mode for "quelles expériences ont utilisé X?" queries
+                if _is_aggregate_ingredient_query(question):
+                    agg_rows = _fetch_ingredient_aggregate(self._driver, ing_tokens)
+                    if agg_rows:
+                        context += (
+                            "\n\n=== Expériences par ingrédient (vue agrégée) ===\n"
+                            + _format_ingredient_aggregate(agg_rows)
+                        )
+                        existing_run_ids = {s.run_id for s in sources}
+                        agg_source_items = [
+                            {"run_id": r["sample_run_ids"][0], "experiment_id": r["experiment_id"]}
+                            for r in agg_rows
+                            if r["sample_run_ids"] and r["sample_run_ids"][0] not in existing_run_ids
+                        ]
+                        if agg_source_items:
+                            sources += _build_sources(agg_source_items, self._driver, is_exact=True)
+
+                # Phase 1a — per-run chunks (MAX 2 slots, appended last)
                 ing_chunks = _fetch_ingredient_context(
                     self._driver, ing_tokens, list(valid_ids)
                 )[:2]
@@ -695,9 +734,27 @@ class RAGPipeline:
                         if new_items_s:
                             sources += _build_sources(new_items_s, self._driver, is_exact=True)
 
-            # Phase 1 — [:USES_INGREDIENT] traversal (MAX 2 slots)
+            # Phase 1 — [:USES_INGREDIENT] traversal
             ing_tokens = _detect_ingredient_tokens(question, self._ingredient_tokens)
             if ing_tokens:
+                # Phase 1b — aggregate mode for "quelles expériences ont utilisé X?" queries
+                if _is_aggregate_ingredient_query(question):
+                    agg_rows = _fetch_ingredient_aggregate(self._driver, ing_tokens)
+                    if agg_rows:
+                        context += (
+                            "\n\n=== Expériences par ingrédient (vue agrégée) ===\n"
+                            + _format_ingredient_aggregate(agg_rows)
+                        )
+                        existing_run_ids = {s.run_id for s in sources}
+                        agg_source_items = [
+                            {"run_id": r["sample_run_ids"][0], "experiment_id": r["experiment_id"]}
+                            for r in agg_rows
+                            if r["sample_run_ids"] and r["sample_run_ids"][0] not in existing_run_ids
+                        ]
+                        if agg_source_items:
+                            sources += _build_sources(agg_source_items, self._driver, is_exact=True)
+
+                # Phase 1a — per-run chunks (MAX 2 slots, appended last)
                 ing_chunks = _fetch_ingredient_context(
                     self._driver, ing_tokens, list(valid_ids)
                 )[:2]
@@ -1162,6 +1219,58 @@ def _format_ingredient_context(ing_chunks: list[dict]) -> str:
             lines.append(c["text"])
         parts.append("\n".join(lines))
     return "\n---\n".join(parts)
+
+
+def _is_aggregate_ingredient_query(question: str) -> bool:
+    """True when the question asks which experiments used an ingredient (aggregate intent)."""
+    return bool(_AGGREGATE_INGREDIENT_RE.search(question))
+
+
+def _fetch_ingredient_aggregate(driver: Driver, tokens: list[str]) -> list[dict]:
+    """Phase 1b — per-token aggregate query: experiment × ingredient × run count.
+
+    Each token is queried independently so unrelated ingredient names in the same
+    question don't cross-contaminate results.
+    """
+    if not tokens:
+        return []
+    seen_exp: set[str] = set()
+    results: list[dict] = []
+    try:
+        with driver.session() as s:
+            for token in tokens:
+                rows = s.run(
+                    _INGREDIENT_AGGREGATE_CYPHER,
+                    tokens=[token],
+                ).data()
+                for row in rows:
+                    key = (row["experiment_id"], row["ingredient"])
+                    if key not in seen_exp:
+                        results.append(row)
+                        seen_exp.add(key)
+    except Exception as exc:
+        _log.debug("Ingredient aggregate fetch failed: %s", exc)
+    return results
+
+
+def _format_ingredient_aggregate(rows: list[dict]) -> str:
+    """Format aggregate rows as a structured ingredient-usage table."""
+    by_ingredient: dict[str, list[dict]] = {}
+    for row in rows:
+        by_ingredient.setdefault(row["ingredient"], []).append(row)
+
+    parts = []
+    for ingredient, exps in by_ingredient.items():
+        lines = [f"=== Expériences utilisant « {ingredient} » ==="]
+        for exp in exps:
+            sample = ", ".join(exp["sample_run_ids"]) if exp["sample_run_ids"] else "—"
+            title = f" — {exp['experiment_title']}" if exp.get("experiment_title") else ""
+            lines.append(
+                f"- {exp['experiment_id']}{title} ({exp['nb_runs']} runs)"
+                f" — Exemple de runs : {sample}"
+            )
+        parts.append("\n".join(lines))
+    return "\n\n".join(parts)
 
 
 def _fetch_urls_from_neo4j(driver: Driver, exp_ids: list[str]) -> dict[str, str]:
