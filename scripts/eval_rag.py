@@ -11,6 +11,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import statistics
@@ -67,6 +68,120 @@ class EvalResult:
     cited_ids: set[str] = field(default_factory=set)
     valid_cited_ids: set[str] = field(default_factory=set)
     dense_gate_score: float = 0.0
+    post_llm_detected: bool = False
+
+
+# ── Answer cache ──────────────────────────────────────────────────────────────
+
+# Absolute paths so the hash is correct regardless of the working directory.
+_PROJECT_ROOT = Path(__file__).parent.parent
+_PIPELINE_SOURCES = [
+    _PROJECT_ROOT / "src/generation/rag_pipeline.py",
+    _PROJECT_ROOT / "src/generation/prompt_fr.py",
+    _PROJECT_ROOT / "src/retrieval/hybrid_retriever.py",
+    _PROJECT_ROOT / "src/config.py",
+]
+
+
+def _pipeline_hash() -> str:
+    h = hashlib.md5()
+    for p in _PIPELINE_SOURCES:
+        if p.exists():
+            h.update(p.read_bytes())
+    return h.hexdigest()[:10]
+
+
+class _AnswerCache:
+    """Persist EvalResult objects keyed by (pipeline_hash, question).
+
+    Cache hit = pipeline code unchanged for that question → reuse answer + contexts,
+    Ragas DiskCache then handles scoring for free (same inputs → same cache key).
+    Entries from old pipeline versions are pruned on each save to bound file size.
+    """
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+        self.pipeline_hash = _pipeline_hash()
+        self._data: dict[str, dict] = {}
+        if path.exists():
+            try:
+                raw = json.loads(path.read_text(encoding="utf-8"))
+                # Load only current-version entries; stale ones are silently dropped.
+                self._data = {
+                    k: v for k, v in raw.items()
+                    if v.get("pipeline_hash") == self.pipeline_hash
+                }
+            except Exception:
+                pass
+        self._hits = 0
+        self._misses = 0
+
+    def _key(self, question: str) -> str:
+        # Separator ":" prevents key collisions from hash/question boundary ambiguity.
+        return hashlib.md5(f"{self.pipeline_hash}:{question}".encode()).hexdigest()
+
+    def get(self, question: str) -> EvalResult | None:
+        entry = self._data.get(self._key(question))
+        if entry is None:
+            self._misses += 1
+            return None
+        self._hits += 1
+        d = entry["result"]
+        return EvalResult(
+            question=d["question"],
+            answer=d["answer"],
+            found_in_corpus=d["found_in_corpus"],
+            sources=d["sources"],
+            input_tokens=d["input_tokens"],
+            output_tokens=d["output_tokens"],
+            latency_s=d["latency_s"],
+            ground_truth=d.get("ground_truth", ""),
+            experiment_id=d.get("experiment_id", ""),
+            retrieved_contexts=d["retrieved_contexts"],
+            ref_traversal_fired=d["ref_traversal_fired"],
+            cited_ids=set(d["cited_ids"]),
+            valid_cited_ids=set(d["valid_cited_ids"]),
+            dense_gate_score=d["dense_gate_score"],
+            post_llm_detected=d["post_llm_detected"],
+        )
+
+    def put(self, question: str, result: EvalResult) -> None:
+        self._data[self._key(question)] = {
+            "pipeline_hash": self.pipeline_hash,
+            "result": {
+                "question": result.question,
+                "answer": result.answer,
+                "found_in_corpus": result.found_in_corpus,
+                "sources": result.sources,
+                "input_tokens": result.input_tokens,
+                "output_tokens": result.output_tokens,
+                "latency_s": result.latency_s,
+                "ground_truth": result.ground_truth,
+                "experiment_id": result.experiment_id,
+                "retrieved_contexts": result.retrieved_contexts,
+                "ref_traversal_fired": result.ref_traversal_fired,
+                "cited_ids": list(result.cited_ids),
+                "valid_cited_ids": list(result.valid_cited_ids),
+                "dense_gate_score": result.dense_gate_score,
+                "post_llm_detected": result.post_llm_detected,
+            },
+        }
+        # Save after each new entry so a Ctrl+C doesn't lose completed work.
+        self._flush()
+
+    def _flush(self) -> None:
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._path.write_text(
+            json.dumps(self._data, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+
+    def save(self) -> None:
+        self._flush()
+
+    def stats(self) -> str:
+        total = self._hits + self._misses
+        pct = f"{100 * self._hits // total}%" if total else "—"
+        return f"{self._hits}/{total} hits ({pct}) — pipeline_hash={self.pipeline_hash}"
 
 
 # ── Custom metrics ─────────────────────────────────────────────────────────────
@@ -115,11 +230,18 @@ def _compute_custom_metrics(
     total_in = sum(r.input_tokens for r in all_results)
     total_out = sum(r.output_tokens for r in all_results)
 
+    post_llm_fallback_rate = (
+        sum(1 for r in present_results if r.post_llm_detected) / len(present_results)
+        if present_results
+        else 0.0
+    )
+
     return {
         "n_present": len(present_results),
         "n_absent": len(absent_results),
         "absent_fallback_rate": round(absent_fallback_rate, 3),
         "present_fallback_rate": round(present_fallback_rate, 3),
+        "post_llm_fallback_rate": round(post_llm_fallback_rate, 3),
         "citation_coverage": round(citation_coverage, 3),
         "citation_validity": round(citation_validity, 3),
         "mean_sources_cited": round(mean_sources_cited, 2),
@@ -149,7 +271,6 @@ ALL_RAGAS_METRICS = [
 
 def _compute_ragas_metrics(
     results: list[EvalResult],
-    anthropic_api_key: str,
     has_ground_truth: bool,
     selected_metrics: list[str] | None = None,
 ) -> dict[str, Any]:
@@ -157,7 +278,6 @@ def _compute_ragas_metrics(
     import os
 
     try:
-        from anthropic import AsyncAnthropic
         from openai import AsyncOpenAI
         from ragas.embeddings.base import embedding_factory
         from ragas.llms import llm_factory
@@ -186,16 +306,18 @@ def _compute_ragas_metrics(
         except Exception:
             pass
 
-    # async clients required — ascore() calls agenerate() internally
-    anthropic_client = AsyncAnthropic(api_key=anthropic_api_key)
+    # DeepSeek: OpenAI-compatible API, ~20x cheaper than claude-sonnet-4-6 ($0.14/$0.28 vs $3/$15 per MTok).
+    deepseek_client = AsyncOpenAI(
+        api_key=os.getenv("DEEPSEEK_API_KEY", ""),
+        base_url="https://api.deepseek.com/v1",
+    )
     llm_kwargs: dict[str, Any] = {
-        "provider": "anthropic",
-        "client": anthropic_client,
-        "max_tokens": 16384,
+        "provider": "openai",
+        "client": deepseek_client,
     }
     if cache is not None:
         llm_kwargs["cache"] = cache
-    llm = llm_factory("claude-sonnet-4-6", **llm_kwargs)
+    llm = llm_factory("deepseek-chat", **llm_kwargs)
 
     openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY", ""))
     embeddings = embedding_factory(
@@ -264,7 +386,10 @@ def _compute_ragas_metrics(
     async def _score_all() -> list[dict[str, Any]]:
         per_q = []
         for r in answered:
-            row: dict[str, Any] = {"question": r.question[:80]}
+            row: dict[str, Any] = {
+                "question": r.question[:80],
+                "answer_preview": r.answer[:200],
+            }
             pool = {
                 "user_input": r.question,
                 "response": r.answer,
@@ -281,7 +406,7 @@ def _compute_ragas_metrics(
                     row[name] = None
                     print(f"  [WARN] {name} sur '{r.question[:50]}': {exc}")
             per_q.append(row)
-            answered_names = [k for k in row if k != "question"]
+            answered_names = [k for k in row if k not in ("question", "answer_preview")]
             scores = " | ".join(
                 f"{k}={row[k]:.2f}" if row[k] is not None else f"{k}=?" for k in answered_names
             )
@@ -328,8 +453,30 @@ def _run_eval(
             captured_contexts.extend(r["ref_text"] for r in active if r.get("ref_text"))
         return refs
 
+    # Capture augmented chunks — _augment_chunks_from_question bypasses _retriever.search
+    # so its results are missing from retrieved_contexts without this patch.
+    # Missing augmented contexts → Ragas faithfulness checks the answer against wrong chunks.
+    orig_augment = rp._augment_chunks_from_question
+
+    def _patched_augment(*args: Any, **kwargs: Any) -> list[dict]:
+        extra = orig_augment(*args, **kwargs)
+        captured_contexts.extend(c["text"] for c in extra if c.get("text"))
+        return extra
+
+    # Capture Phase 1b aggregate context — formatted string injected directly into the
+    # prompt, bypassing all chunk-based capture paths above.
+    orig_fetch_agg = rp._fetch_ingredient_aggregate
+
+    def _patched_fetch_agg(driver: Any, tokens: list) -> list[dict]:
+        rows = orig_fetch_agg(driver, tokens)
+        if rows:
+            captured_contexts.append(rp._format_ingredient_aggregate(rows))
+        return rows
+
     pipeline._retriever.search = _patched_search
     rp._fetch_reference_summaries = _patched_fetch_ref
+    rp._augment_chunks_from_question = _patched_augment
+    rp._fetch_ingredient_aggregate = _patched_fetch_agg
 
     try:
         t0 = time.monotonic()
@@ -338,10 +485,21 @@ def _run_eval(
     finally:
         pipeline._retriever.search = orig_search
         rp._fetch_reference_summaries = orig_fetch_ref
+        rp._augment_chunks_from_question = orig_augment
+        rp._fetch_ingredient_aggregate = orig_fetch_agg
 
     cited_ids = rp.extract_cited_ids(resp.answer)
     valid_ids = {s.run_id for s in (resp.sources or [])}
     dense_score = rp.get_dense_score(pipeline, question)
+
+    # Post-LLM fallback : gate dense passée mais found_in_corpus=False avec chunks récupérés
+    # → le détecteur de non-réponse a déclenché après génération LLM.
+    from src.config import SCORE_THRESHOLD
+    post_llm_detected = (
+        not resp.found_in_corpus
+        and dense_score >= SCORE_THRESHOLD
+        and bool(captured_contexts)
+    )
 
     return EvalResult(
         question=question,
@@ -358,6 +516,7 @@ def _run_eval(
         cited_ids=cited_ids,
         valid_cited_ids=cited_ids & valid_ids,
         dense_gate_score=dense_score,
+        post_llm_detected=post_llm_detected,
     )
 
 
@@ -382,6 +541,11 @@ def main() -> None:
         "--no-testset",
         action="store_true",
         help="Forcer les questions hardcodées même si data/testset.json existe",
+    )
+    parser.add_argument(
+        "--no-answer-cache",
+        action="store_true",
+        help="Désactiver le cache des réponses pipeline (force re-run de toutes les questions)",
     )
     parser.add_argument(
         "--metrics",
@@ -431,6 +595,12 @@ def main() -> None:
     else:
         questions_absent = QUESTIONS_ABSENT
 
+    # ── Answer cache ──────────────────────────────────────────────────────────
+    answer_cache: _AnswerCache | None = None
+    if not args.no_answer_cache:
+        answer_cache = _AnswerCache(Path(".eval_cache/answers.json"))
+        print(f"[answer-cache] actif — pipeline_hash={answer_cache.pipeline_hash}")
+
     # ── Pipeline ──────────────────────────────────────────────────────────────
     from src.generation.rag_pipeline import build_pipeline
 
@@ -444,15 +614,37 @@ def main() -> None:
         item = present_items[i - 1] if present_items else None
         gt = item.get("ground_truth", "") if item else ""
         exp_id = (item.get("experiment_id") or "") if item else ""
-        print(f"  [{i}/{len(questions_present)}] {q[:70]}…")
-        present_results.append(_run_eval(pipeline, q, gt, exp_id))
+        cached = answer_cache.get(q) if answer_cache else None
+        if cached:
+            cached.ground_truth = gt
+            cached.experiment_id = exp_id
+            present_results.append(cached)
+            print(f"  [{i}/{len(questions_present)}] [cache] {q[:70]}…")
+        else:
+            print(f"  [{i}/{len(questions_present)}] {q[:70]}…")
+            result = _run_eval(pipeline, q, gt, exp_id)
+            if answer_cache:
+                answer_cache.put(q, result)
+            present_results.append(result)
 
     # ── Questions absentes ────────────────────────────────────────────────────
     print(f"\nQuestions absentes ({len(questions_absent)})…")
     absent_results: list[EvalResult] = []
     for i, q in enumerate(questions_absent, 1):
-        print(f"  [{i}/{len(questions_absent)}] {q[:70]}…")
-        absent_results.append(_run_eval(pipeline, q))
+        cached = answer_cache.get(q) if answer_cache else None
+        if cached:
+            absent_results.append(cached)
+            print(f"  [{i}/{len(questions_absent)}] [cache] {q[:70]}…")
+        else:
+            print(f"  [{i}/{len(questions_absent)}] {q[:70]}…")
+            result = _run_eval(pipeline, q)
+            if answer_cache:
+                answer_cache.put(q, result)
+            absent_results.append(result)
+
+    if answer_cache:
+        answer_cache.save()
+        print(f"\n[answer-cache] {answer_cache.stats()}")
 
     # ── Métriques custom ──────────────────────────────────────────────────────
     metrics = _compute_custom_metrics(present_results, absent_results)
@@ -463,8 +655,9 @@ def main() -> None:
     print(f"  Corpus présent     : {metrics['n_present']} questions")
     print(f"  Corpus absent      : {metrics['n_absent']} questions")
     print()
-    print(f"  absent_fallback_rate  : {metrics['absent_fallback_rate']:.1%}  (cible : 1.0)")
-    print(f"  present_fallback_rate : {metrics['present_fallback_rate']:.1%}  (cible : 0.0)")
+    print(f"  absent_fallback_rate      : {metrics['absent_fallback_rate']:.1%}  (cible : 1.0)")
+    print(f"  present_fallback_rate     : {metrics['present_fallback_rate']:.1%}  (pre-LLM gate)")
+    print(f"  post_llm_fallback_rate    : {metrics['post_llm_fallback_rate']:.1%}  (refus post-génération)")
     print()
     print(f"  citation_coverage     : {metrics['citation_coverage']:.1%}  (cible : 1.0)")
     print(f"  citation_validity     : {metrics['citation_validity']:.1%}  (cible : 1.0)")
@@ -524,11 +717,11 @@ def main() -> None:
                 else None
             )
             ragas_metrics = _compute_ragas_metrics(
-                present_results, api_key, has_ground_truth, selected
+                present_results, has_ground_truth, selected
             )
             if ragas_metrics:
                 print("\n" + "=" * 60)
-                print("MÉTRIQUES RAGAS (LLM-as-judge, claude-sonnet-4-6)")
+                print("MÉTRIQUES RAGAS (LLM-as-judge, deepseek-chat)")
                 if has_ground_truth:
                     print("  (avec ground_truth → métriques référencées incluses)")
                 print("=" * 60)
@@ -550,16 +743,19 @@ def main() -> None:
         output = {
             "custom_metrics": metrics,
             "ragas_metrics": {k: v for k, v in ragas_metrics.items() if k != "per_question"},
+            "ragas_per_question": ragas_metrics.get("per_question", []),
             "has_ground_truth": has_ground_truth,
             "results": [
                 {
                     "question": r.question,
                     "experiment_id": r.experiment_id,
                     "found_in_corpus": r.found_in_corpus,
+                    "answer_preview": r.answer[:400] if r.answer else "",
                     "n_sources": len(r.sources),
                     "n_cited": len(r.cited_ids),
                     "n_valid_cited": len(r.valid_cited_ids),
                     "ref_traversal": r.ref_traversal_fired,
+                    "post_llm_detected": r.post_llm_detected,
                     "dense_gate_score": r.dense_gate_score,
                     "latency_s": r.latency_s,
                     "input_tokens": r.input_tokens,
