@@ -54,8 +54,8 @@ _PUBMED_QUERIES: dict[str, list[str]] = {
         "vegetable protein product water retention cohesion[tiab]",
     ],
     "Nouvelles voies de texturation des protéines végétales": [
-        "shear cell plant protein texturization[tiab]",
-        "direct shear technology vegetable protein fibrous[tiab]",
+        "plant protein texturization novel technology meat analog[tiab]",
+        "shear cell extrusion alternative plant protein fibrous structure[tiab]",
     ],
 }
 
