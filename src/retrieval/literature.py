@@ -34,8 +34,9 @@ _QUERIES: dict[str, list[str]] = {
 
 def _build_client() -> SemanticScholar:
     api_key = os.getenv("SEMANTIC_SCHOLAR_API_KEY", "") or None
-    # retry=True (default): retries up to 10× on HTTP 429, 30s apart
-    return SemanticScholar(api_key=api_key, timeout=10)
+    # retry=False: 30s×10 retries is too slow for a user-facing flow.
+    # We handle degradation gracefully by catching exceptions per query.
+    return SemanticScholar(api_key=api_key, timeout=10, retry=False)
 
 
 def _format_paper(p: object) -> str:
@@ -77,14 +78,16 @@ def fetch_literature(groupement: str, max_papers: int = 6) -> str:
         if len(papers) >= max_papers:
             break
         try:
-            results = sch.search_paper(
+            # list() forces full evaluation here — PaginatedResults is lazy,
+            # so HTTP errors would otherwise surface during iteration below.
+            results = list(sch.search_paper(
                 query,
                 fields=_FIELDS,
                 fields_of_study=_FIELDS_OF_STUDY,
                 year=_YEAR_FILTER,
                 min_citation_count=_MIN_CITATIONS,
                 limit=per_query,
-            )
+            ))
         except Exception as exc:
             _log.warning("Semantic Scholar unavailable (%s) — skipping query: %s", exc, query)
             continue
