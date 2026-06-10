@@ -82,7 +82,7 @@ def build_triples(doc):
     for fdef in doc.get("design", {}).get("factors", []):
         factor_units[fdef["name"]] = fdef.get("unit") or ""
         T.add(eid, "hasFactor", fdef["name"])
-        for lvl in fdef.get("levels", []):
+        for lvl in (fdef.get("levels") or []):
             T.add(fdef["name"], "hasLevel", lvl, fdef.get("unit") or "")
     if doc.get("design", {}).get("control") is not None:
         T.add(eid, "controlRun", f"{eid}:Run:{safe(doc['design']['control'])}")

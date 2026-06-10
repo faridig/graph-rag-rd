@@ -1,0 +1,110 @@
+- generic:
+  - generic:
+    - generic:
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - button:
+                  - img
+            - generic:
+              - button [expanded]:
+                - generic: Lisez-moi
+              - button:
+                - img
+                - generic: Toggle theme
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - img
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - article: Bonjour ! Je suis la base de connaissances R&D ACCRO.
+                                        - article: "Je couvre 170 expériences (2 371 runs) issues des pôles Extrusion et Applications. Posez-moi des questions sur vos essais : effets d'ingrédients, valeurs mesurées, comparaisons entre runs, références croisées."
+                                        - article: "Quelques exemples :"
+                                        - list:
+                                          - listitem: Quel effet a l'huile de tournesol sur l'anisotropie dans les essais M03 ?
+                                          - listitem: Quelles expériences ont utilisé du psyllium Fibrinel PSL ?
+                                          - listitem: Comparer les valeurs de SME entre les runs KOBE session 1
+                                        - article: Utilisez ⚙️ pour filtrer par chantier. Chaque réponse cite ses sources — cliquez pour ouvrir le fichier SharePoint.
+                    - generic:
+                      - button:
+                        - img
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - textbox:
+                            - /placeholder: Tapez votre message ici...
+                        - generic:
+                          - generic:
+                            - generic:
+                              - button:
+                                - img
+                            - button:
+                              - img
+                          - generic:
+                            - button [disabled]:
+                              - img
+  - dialog "Lisez-moi" [ref=e65]:
+    - generic [ref=e66]:
+      - heading "Lisez-moi" [level=2] [ref=e68]
+      - generic [ref=e69]:
+        - heading "Base de connaissances R&D — ACCRO" [level=1] [ref=e70]
+        - article [ref=e71]: Système de questions-réponses sur les expériences d'extrusion et d'application ACCRO.
+        - heading "Corpus" [level=2] [ref=e72]
+        - list [ref=e73]:
+          - listitem [ref=e74]: 170 expériences · 2 371 runs · 3 072 blocs de données
+          - listitem [ref=e75]: "Données issues de SharePoint : fiches d'essais, résultats analytiques, synthèses"
+        - heading "Types de questions supportées" [level=2] [ref=e76]
+        - table [ref=e79]:
+          - rowgroup [ref=e80]:
+            - row "Type Exemple" [ref=e81]:
+              - columnheader "Type" [ref=e82]
+              - columnheader "Exemple" [ref=e83]
+          - rowgroup [ref=e84]:
+            - row "Factuelle \"Quel effet a l'huile sur l'anisotropie dans M03 ?\"" [ref=e85]:
+              - cell "Factuelle" [ref=e86]
+              - cell "\"Quel effet a l'huile sur l'anisotropie dans M03 ?\"" [ref=e87]
+            - row "Lookup ingrédient \"Quelles expériences ont utilisé du psyllium Fibrinel PSL ?\"" [ref=e88]:
+              - cell "Lookup ingrédient" [ref=e89]
+              - cell "\"Quelles expériences ont utilisé du psyllium Fibrinel PSL ?\"" [ref=e90]
+            - row "Comparaison \"Comparer les valeurs de SME entre les runs KOBE session 1\"" [ref=e91]:
+              - cell "Comparaison" [ref=e92]
+              - cell "\"Comparer les valeurs de SME entre les runs KOBE session 1\"" [ref=e93]
+            - row "Valeur mesurée \"Quels essais ont atteint une anisotropie supérieure à 1,2 ?\"" [ref=e94]:
+              - cell "Valeur mesurée" [ref=e95]
+              - cell "\"Quels essais ont atteint une anisotropie supérieure à 1,2 ?\"" [ref=e96]
+            - row "Référence \"Quelles expériences référencent ACE-5 ?\"" [ref=e97]:
+              - cell "Référence" [ref=e98]
+              - cell "\"Quelles expériences référencent ACE-5 ?\"" [ref=e99]
+        - heading "Filtrer par chantier" [level=2] [ref=e100]
+        - article [ref=e101]: Cliquez sur ⚙️ (paramètres) pour limiter la recherche à un chantier spécifique — ex. Extrusion HME, Applications, etc.
+        - heading "Sources" [level=2] [ref=e102]
+        - article [ref=e103]: Chaque réponse cite ses sources (expérience + numéro de run). Cliquez sur un lien pour accéder directement au fichier SharePoint.
+        - heading "Limites connues" [level=2] [ref=e104]
+        - list [ref=e105]:
+          - listitem [ref=e106]: "STRIP-15, STRIP-18, STRIP-B09 : absents du corpus (fichiers non disponibles sur SharePoint)"
+          - listitem [ref=e107]: "Synthèses KOBE multi-session (S1+S2 combinées) : résultats partiels"
+          - listitem [ref=e108]:
+            - generic [ref=e109]:
+              - code [ref=e110]: panel_ressemblant_score
+              - text: KOBE
+            - text: ": donnée non extraite — questions de type \"meilleur run couleur\" sans réponse fiable"
+        - article [ref=e111]: "Contact : pôle R&D ACCRO"
+    - button "Close" [active] [ref=e112] [cursor=pointer]:
+      - img [ref=e113]
+      - generic [ref=e116]: Close

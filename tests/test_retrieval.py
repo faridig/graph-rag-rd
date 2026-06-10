@@ -58,8 +58,11 @@ def test_exact_lookup_returns_empty_list_when_not_found():
 def test_exact_lookup_passes_name_to_cypher():
     driver = _make_driver([])
     exact_lookup(driver, "Pisane ES")
-    _, kwargs = driver.session.return_value.__enter__.return_value.run.call_args
-    assert kwargs.get("name") == "Pisane ES"
+    # exact_lookup now makes two calls: ingredient CONTAINS + fulltext.
+    # Verify the ingredient query (first call) passes the name kwarg.
+    all_calls = driver.session.return_value.__enter__.return_value.run.call_args_list
+    first_call_kwargs = all_calls[0][1] if all_calls else {}
+    assert first_call_kwargs.get("name") == "Pisane ES"
 
 
 def test_exact_lookup_returns_all_rows():

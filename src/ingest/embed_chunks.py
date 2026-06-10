@@ -103,7 +103,7 @@ def _extract_field(section: str, field: str) -> str | None:
 
 
 def _chunk_run_detail(content: str, source_file: str, experiment_id: str) -> list[dict]:
-    parts = re.split(r"### Run ([\w-]+) —[^\n]*\n", content)
+    parts = re.split(r"### Run ([\w.\-]+) —[^\n]*\n", content)
     chunks: list[dict] = []
     first_local_id: str | None = None
 
@@ -138,24 +138,80 @@ def _chunk_run_detail(content: str, source_file: str, experiment_id: str) -> lis
             }
         )
 
-    # Summary chunk: extract sections 4+ (variations table + observations/conclusions).
-    # Linked to the first run so the retrieval Cypher can reach it.
-    last_section = parts[-1] if len(parts) > 1 else ""
-    m_summary = re.search(r"\n(## \d+\..*)", last_section, re.DOTALL)
-    if m_summary and first_local_id is not None:
-        summary_text = m_summary.group(1).strip()
-        run_id_summary = f"{experiment_id}:Run:{first_local_id}"
+    if first_local_id is None:
+        return chunks
+
+    first_run_id = f"{experiment_id}:Run:{first_local_id}"
+
+    # ── Point 2: Intro chunk ──────────────────────────────────────────────────
+    # parts[0] = content before the first ### Run: experiment title + sections 1-3
+    # (Identity, objective, global inputs, targets, references).  Previously discarded.
+    # Remove the generated-by preamble (> Exhaustive structured synthesis…) which is
+    # metadata noise, then keep everything else as a searchable chunk.
+    intro_raw = parts[0].strip() if parts else ""
+    intro_text = re.sub(r"^>.*$\n?", "", intro_raw, flags=re.MULTILINE).strip()
+    if len(intro_text) > 100:
         chunks.append(
             {
-                "id": deterministic_chunk_id(f"{experiment_id}:summary", source_file),
-                "text": f"# {experiment_id} — synthèse et conclusions\n\n{summary_text}",
+                "id": deterministic_chunk_id(f"{experiment_id}:intro", source_file),
+                "text": intro_text,
                 "source_file": source_file,
                 "experiment_id": experiment_id,
-                "run_id": run_id_summary,
+                "run_id": first_run_id,
                 "chantier": None,
                 "date": None,
                 "lead": None,
-                "type": "experiment_summary",
+                "type": "experiment_intro",
+                "pole": None,
+            }
+        )
+
+    # ── Point 1: Split summary into one chunk per ## N. section ──────────────
+    # Old behaviour: one blob (sections 4-8) → up to 17 000 chars, poor cosine
+    # precision.  New behaviour: each ## N. section is a separate chunk so the
+    # embedding captures a single topic (derived values / observations / glossary).
+    # Section 5 (Observations & conclusions) keeps the OLD chunk ID so the existing
+    # HAS_SUMMARY relationship in Neo4j is preserved without a schema migration.
+    last_section = parts[-1] if len(parts) > 1 else ""
+    m_summary = re.search(r"\n(## \d+\..*)", last_section, re.DOTALL)
+    if not m_summary:
+        return chunks
+
+    summary_text = m_summary.group(1).strip()
+    # Split on any newline immediately followed by ## <digit> (handles ## 7b. etc.)
+    raw_sections = re.split(r"\n(?=## \d)", summary_text)
+
+    for sec_raw in raw_sections:
+        sec_raw = sec_raw.strip()
+        if not sec_raw:
+            continue
+        m_num = re.match(r"## (\d+[a-z]?)\.", sec_raw)
+        if not m_num:
+            continue
+        sec_num = m_num.group(1)
+        body = sec_raw[sec_raw.index("\n"):].strip() if "\n" in sec_raw else ""
+        if len(body) < 50:
+            continue
+
+        section_text = f"# {experiment_id} — synthèse et conclusions\n\n{sec_raw}"
+        is_obs = sec_num == "5"
+        # Section 5 reuses the old ID so HAS_SUMMARY edge survives the update.
+        chunk_id = (
+            deterministic_chunk_id(f"{experiment_id}:summary", source_file)
+            if is_obs
+            else deterministic_chunk_id(f"{experiment_id}:section:{sec_num}", source_file)
+        )
+        chunks.append(
+            {
+                "id": chunk_id,
+                "text": section_text,
+                "source_file": source_file,
+                "experiment_id": experiment_id,
+                "run_id": first_run_id,
+                "chantier": None,
+                "date": None,
+                "lead": None,
+                "type": "experiment_summary" if is_obs else "experiment_section",
                 "pole": None,
             }
         )
@@ -170,7 +226,7 @@ def chunk_documentation(path: Path, source_type: str) -> list[dict]:
 
     if source_type == "REPERTOIRE":
         experiment_id = "REPERTOIRE-RD-2025-2026"
-        parts = re.split(r"### Run ([\w-]+) —[^\n]*\n", content)
+        parts = re.split(r"### Run ([\w.\-]+) —[^\n]*\n", content)
         for i in range(1, len(parts), 2):
             local_id = parts[i].strip()
             section = parts[i + 1] if i + 1 < len(parts) else ""

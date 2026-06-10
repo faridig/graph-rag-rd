@@ -31,6 +31,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 
 import anthropic
 import httpx
+import openai as _openai
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -54,6 +55,14 @@ MAX_INVENTORY_CHARS = 800_000
 MAX_RETRIES = 2
 SLEEP_BETWEEN = 2.0          # Sonnet 4.6 has higher rate limits than Opus 4.8
 
+# DeepSeek provider (OpenAI-compatible)
+_DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
+_DEEPSEEK_MODEL = "deepseek-chat"
+_DEEPSEEK_MAX_TOKENS = 8192   # DeepSeek-V3 output cap
+
+# Module-level provider selection — set by main() from --provider arg
+_PROVIDER: str = "anthropic"
+
 # ---------------------------------------------------------------------------
 # Cost tracking — Anthropic pricing (USD per million tokens)
 # Source: https://platform.claude.com/docs/en/about-claude/pricing (verified 2026-06-03)
@@ -66,6 +75,12 @@ _PRICING: dict[str, float] = {
     "output":      15.00,   # output tokens (incl. thinking tokens)
     "cache_write":  3.75,   # 5-min cache write (1.25× input, ttl="5m")
     "cache_read":   0.30,   # cache read/hit (0.10× input)
+}
+
+# DeepSeek-V3 pricing (USD per million tokens, 2026-06)
+_PRICING_DEEPSEEK: dict[str, float] = {
+    "input":  0.07,
+    "output": 1.10,
 }
 
 # Batch API alternative (50% discount, async, hours delay):
@@ -86,19 +101,24 @@ class _Cost:
     cache_read_tokens:  int = 0
 
     def add_usage(self, usage: object) -> None:
-        self.input_tokens       += getattr(usage, "input_tokens", 0) or 0
-        self.output_tokens      += getattr(usage, "output_tokens", 0) or 0
+        # Anthropic: input_tokens / output_tokens
+        # OpenAI / DeepSeek: prompt_tokens / completion_tokens
+        self.input_tokens  += (getattr(usage, "input_tokens", None)
+                               or getattr(usage, "prompt_tokens", 0) or 0)
+        self.output_tokens += (getattr(usage, "output_tokens", None)
+                               or getattr(usage, "completion_tokens", 0) or 0)
         self.cache_write_tokens += getattr(usage, "cache_creation_input_tokens", 0) or 0
         self.cache_read_tokens  += getattr(usage, "cache_read_input_tokens", 0) or 0
 
     @property
     def usd(self) -> float:
         M = 1_000_000
+        pricing = _PRICING_DEEPSEEK if _PROVIDER == "deepseek" else _PRICING
         return (
-            self.input_tokens       / M * _PRICING["input"]
-            + self.output_tokens    / M * _PRICING["output"]
-            + self.cache_write_tokens / M * _PRICING["cache_write"]
-            + self.cache_read_tokens  / M * _PRICING["cache_read"]
+            self.input_tokens       / M * pricing.get("input", 0)
+            + self.output_tokens    / M * pricing.get("output", 0)
+            + self.cache_write_tokens / M * pricing.get("cache_write", 0)
+            + self.cache_read_tokens  / M * pricing.get("cache_read", 0)
         )
 
     def __add__(self, other: "_Cost") -> "_Cost":
@@ -535,10 +555,58 @@ Return ONLY the JSON, inside ```json ... ``` fences. No explanation before or af
 
 
 # ---------------------------------------------------------------------------
+# API call — DeepSeek (OpenAI-compatible, no thinking/cache)
+
+def _call_llm_deepseek(user_message: str, oai_client: "_openai.OpenAI") -> tuple[str, _Cost]:
+    call_cost = _Cost()
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            stream = oai_client.chat.completions.create(
+                model=_DEEPSEEK_MODEL,
+                max_tokens=_DEEPSEEK_MAX_TOKENS,
+                messages=[
+                    {"role": "system", "content": _SYSTEM_PROMPT},
+                    {"role": "user", "content": user_message},
+                ],
+                stream=True,
+                stream_options={"include_usage": True},
+            )
+            parts: list[str] = []
+            usage = None
+            for chunk in stream:
+                delta = chunk.choices[0].delta.content if chunk.choices else None
+                if delta:
+                    parts.append(delta)
+                if getattr(chunk, "usage", None):
+                    usage = chunk.usage
+            text = "".join(parts)
+            if usage:
+                call_cost.add_usage(usage)
+            log.info(
+                "  deepseek tokens in=%d out=%d → $%.4f",
+                getattr(usage, "prompt_tokens", 0) if usage else 0,
+                getattr(usage, "completion_tokens", 0) if usage else 0,
+                call_cost.usd,
+            )
+            return text, call_cost
+        except Exception as e:
+            if attempt < MAX_RETRIES:
+                wait = 15 * (attempt + 1)
+                log.warning("DeepSeek error (%s) — retry %d/%d in %ds", e, attempt + 1, MAX_RETRIES, wait)
+                time.sleep(wait)
+            else:
+                raise
+    raise RuntimeError("Max retries exceeded")
+
+
+# ---------------------------------------------------------------------------
 # API call with prompt caching
 
-def _call_llm(user_message: str, client: anthropic.Anthropic) -> tuple[str, _Cost]:
-    """Returns (response_text, cost_for_this_call). Uses streaming (required for max_tokens>10m)."""
+def _call_llm(user_message: str, client) -> tuple[str, _Cost]:
+    """Returns (response_text, cost_for_this_call). Dispatches to DeepSeek or Anthropic."""
+    if _PROVIDER == "deepseek":
+        return _call_llm_deepseek(user_message, client)
+
     call_cost = _Cost()
     for attempt in range(MAX_RETRIES + 1):
         try:
@@ -703,18 +771,35 @@ Never leave null values. Never reference another run.
 """
 
     try:
-        with client.messages.stream(
-            model="claude-sonnet-4-6",
-            max_tokens=8_000,
-            messages=[{"role": "user", "content": prompt}],
-        ) as stream:
-            text = stream.get_final_text()
-            msg = stream.get_final_message()
-        repair_cost.add_usage(msg.usage)
-        log.info(
-            "  repair tokens in=%d out=%d → $%.4f",
-            msg.usage.input_tokens, msg.usage.output_tokens, repair_cost.usd,
-        )
+        if _PROVIDER == "deepseek":
+            stream = client.chat.completions.create(
+                model=_DEEPSEEK_MODEL,
+                max_tokens=8_000,
+                messages=[{"role": "user", "content": prompt}],
+                stream=True,
+                stream_options={"include_usage": True},
+            )
+            parts: list[str] = []
+            usage_r = None
+            for chunk in stream:
+                delta = chunk.choices[0].delta.content if chunk.choices else None
+                if delta:
+                    parts.append(delta)
+                if getattr(chunk, "usage", None):
+                    usage_r = chunk.usage
+            text = "".join(parts)
+            if usage_r:
+                repair_cost.add_usage(usage_r)
+        else:
+            with client.messages.stream(
+                model="claude-sonnet-4-6",
+                max_tokens=8_000,
+                messages=[{"role": "user", "content": prompt}],
+            ) as stream:
+                text = stream.get_final_text()
+                msg = stream.get_final_message()
+            repair_cost.add_usage(msg.usage)
+        log.info("  repair → $%.4f", repair_cost.usd)
     except Exception as e:
         log.warning("  repair call failed (%s) — keeping original runs", e)
         return doc, repair_cost
@@ -907,7 +992,11 @@ def _merge_continuation(base_doc: dict, cont_doc: dict) -> dict:
 # ---------------------------------------------------------------------------
 # Main processing loop
 
-def process_file(path: Path, client: anthropic.Anthropic) -> tuple[bool, _Cost]:
+def process_file(
+    path: Path,
+    client: anthropic.Anthropic,
+    inventory_override: str | None = None,
+) -> tuple[bool, _Cost]:
     """Returns (success, cost_for_this_file)."""
     stem = path.stem
     out_subdir = OUT_DIR / stem
@@ -915,16 +1004,20 @@ def process_file(path: Path, client: anthropic.Anthropic) -> tuple[bool, _Cost]:
     file_cost = _Cost()
 
     # Step 1: inventory
-    try:
-        inventory, target_sheet = get_inventory(path)
-    except Exception as e:
-        log.error("  INVENTORY FAILED: %s", e)
-        return False, file_cost
-    log.info(
-        "  inventory: %d chars%s",
-        len(inventory),
-        f" (sheet: {target_sheet!r})" if target_sheet else "",
-    )
+    if inventory_override is not None:
+        inventory, target_sheet = inventory_override, None
+        log.info("  inventory: %d chars (pre-read)", len(inventory))
+    else:
+        try:
+            inventory, target_sheet = get_inventory(path)
+        except Exception as e:
+            log.error("  INVENTORY FAILED: %s", e)
+            return False, file_cost
+        log.info(
+            "  inventory: %d chars%s",
+            len(inventory),
+            f" (sheet: {target_sheet!r})" if target_sheet else "",
+        )
 
     # Step 2: LLM extraction
     file_type = (
@@ -1101,6 +1194,22 @@ def process_file_continuation(path: Path, client: anthropic.Anthropic) -> tuple[
     return True, file_cost
 
 
+def _make_client(provider: str):
+    """Create and return an LLM client for the given provider."""
+    if provider == "deepseek":
+        api_key = os.environ.get("DEEPSEEK_API_KEY")
+        if not api_key:
+            log.error("DEEPSEEK_API_KEY not set")
+            sys.exit(1)
+        return _openai.OpenAI(base_url=_DEEPSEEK_BASE_URL, api_key=api_key)
+    else:
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            log.error("ANTHROPIC_API_KEY not set")
+            sys.exit(1)
+        return anthropic.Anthropic(api_key=api_key)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dry-run", action="store_true", help="Show what would be processed")
@@ -1120,7 +1229,39 @@ def main() -> None:
             "Use with --file to target a specific file."
         ),
     )
+    ap.add_argument(
+        "--provider",
+        choices=["anthropic", "deepseek"],
+        default="anthropic",
+        help="LLM provider: anthropic (default, Sonnet 4.6) or deepseek (DeepSeek-V3, cheaper)",
+    )
+    ap.add_argument(
+        "--inventory-text",
+        metavar="FILE",
+        help="Pre-read inventory text file (skip openpyxl/docx). Requires --file NAME.ext.",
+    )
     args = ap.parse_args()
+
+    global _PROVIDER
+    _PROVIDER = args.provider
+
+    # --inventory-text: bypass file discovery, use pre-read inventory text
+    if args.inventory_text:
+        if not args.file:
+            log.error("--inventory-text requires --file NAME.ext")
+            sys.exit(1)
+        inventory_text = Path(args.inventory_text).read_text(encoding="utf-8")
+        virtual_path = BRUT_DIR / args.file
+        client = _make_client(args.provider)
+        pricing_active = _PRICING_DEEPSEEK if _PROVIDER == "deepseek" else _PRICING
+        log.info(
+            "Provider: %s  Pricing: input=$%.2f output=$%.2f (per M tokens)",
+            _PROVIDER, pricing_active.get("input", 0), pricing_active.get("output", 0),
+        )
+        log.info("[1/1] %s (inventory from %s)", args.file, args.inventory_text)
+        ok, cost = process_file(virtual_path, client, inventory_override=inventory_text)
+        log.info("  cost: $%.4f  success=%s", cost.usd, ok)
+        return
 
     # --rescue: bypass all skip/level checks, call process_file_continuation
     if args.rescue:
@@ -1151,20 +1292,16 @@ def main() -> None:
             log.info("No truncated files to rescue.")
             sys.exit(0)
 
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
-        if not api_key:
-            log.error("ANTHROPIC_API_KEY not set")
-            sys.exit(1)
-
-        client = anthropic.Anthropic(api_key=api_key)
+        client = _make_client(args.provider)
         limit_r = args.limit if args.limit > 0 else len(candidates_rescue)
         succeeded_r: list[str] = []
         failed_r: list[str] = []
         total_cost_r = _Cost()
 
+        pricing_active = _PRICING_DEEPSEEK if _PROVIDER == "deepseek" else _PRICING
         log.info(
-            "Pricing: input=$%.2f output=$%.2f cache_write=$%.2f cache_read=$%.2f (per M tokens)",
-            _PRICING["input"], _PRICING["output"], _PRICING["cache_write"], _PRICING["cache_read"],
+            "Provider: %s  Pricing: input=$%.2f output=$%.2f (per M tokens)",
+            _PROVIDER, pricing_active.get("input", 0), pricing_active.get("output", 0),
         )
 
         for i, path in enumerate(candidates_rescue[:limit_r], 1):
@@ -1292,12 +1429,7 @@ def main() -> None:
         log.info("Nothing to process.")
         return
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        log.error("ANTHROPIC_API_KEY not set")
-        sys.exit(1)
-
-    client = anthropic.Anthropic(api_key=api_key)
+    client = _make_client(args.provider)
     limit = args.limit if args.limit > 0 else len(to_process)
     succeeded: list[str] = []
     failed: list[str] = []

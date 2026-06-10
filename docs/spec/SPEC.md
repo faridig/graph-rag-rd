@@ -1,8 +1,11 @@
 # Spec : Graph RAG — Capitalisation des savoirs R&D Food Tech
 
-**Version :** 1.2  
-**Date :** 2026-05-29  
-**Statut :** Validé (Phase 1 → Phase 2)
+**Version :** 1.3
+**Date :** 2026-06-10
+**Statut :** Validé — Phase CIR ajoutée
+
+> **Specs additionnelles :**
+> - [CIR_FEATURE.md](CIR_FEATURE.md) — Génération de fiches CIR MESRI depuis Neo4j
 
 ---
 

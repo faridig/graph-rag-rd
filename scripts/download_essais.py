@@ -85,14 +85,22 @@ def graph_get(session: requests.Session, path: str, **kwargs) -> dict:
 
 def get_drive_id(session: requests.Session) -> str:
     """Retourne le driveId du document library par défaut du site RD."""
-    site = graph_get(session, f"/sites/{SITE_HOSTNAME}:{SITE_PATH}")
+    return _get_drive_id_for_site(session, SITE_PATH)
+
+
+def _get_drive_id_for_site(session: requests.Session, site_path: str) -> str:
+    """Retourne le driveId du document library par défaut pour un site SharePoint."""
+    site = graph_get(session, f"/sites/{SITE_HOSTNAME}:{site_path}")
     site_id = site["id"]
     drives = graph_get(session, f"/sites/{site_id}/drives", params={"$select": "id,name,driveType"})
-    # La bibliothèque "Documents" est généralement la première de type documentLibrary
     for drive in drives["value"]:
         if drive.get("driveType") == "documentLibrary":
             return drive["id"]
     return drives["value"][0]["id"]
+
+
+# Cache des drive IDs par site pour éviter les appels répétés
+_drive_id_cache: dict[str, str] = {}
 
 
 # ── Lecture Excel ─────────────────────────────────────────────────────────────
@@ -243,9 +251,34 @@ def resolve_sharepoint_link(
     if is_relative and drive_id:
         from urllib.parse import unquote
         clean = _strip_leading_dotdot(url)
-        # Supprimer les paramètres de query (?web=1, etc.)
         clean = clean.split("?")[0]
         path = unquote(clean).strip("/")
+
+        # Détection chemin cross-site : "SiteName/Documents partages/..."
+        # Ex: "RDIndustrieCollaboration/Documents partages/Essais industriels/..."
+        cross_site_match = re.match(r'^([A-Za-z0-9_-]+)/([^/]+)/(.+)$', path)
+        if cross_site_match:
+            site_name = cross_site_match.group(1)
+            file_path = cross_site_match.group(3)   # chemin sous la bibliothèque (ignore lib_name)
+            cross_site_path = f"/sites/{site_name}"
+            if cross_site_path != SITE_PATH:
+                # Résoudre avec le drive du site cible
+                cross_drive_id = _drive_id_cache.get(cross_site_path)
+                if cross_drive_id is None:
+                    try:
+                        cross_drive_id = _get_drive_id_for_site(session, cross_site_path)
+                        _drive_id_cache[cross_site_path] = cross_drive_id
+                    except requests.HTTPError as exc_site:
+                        st = exc_site.response.status_code if exc_site.response is not None else "?"
+                        print(f"  ✗ Site {site_name} inaccessible ({st})")
+                        cross_drive_id = None
+                if cross_drive_id:
+                    try:
+                        return graph_get(session, f"/drives/{cross_drive_id}/root:/{file_path}")
+                    except requests.HTTPError as exc_cs:
+                        st = exc_cs.response.status_code if exc_cs.response is not None else "?"
+                        print(f"  ✗ cross-site drive/root:/ ({st}) : {file_path[:70]}")
+
         try:
             return graph_get(session, f"/drives/{drive_id}/root:/{path}")
         except requests.HTTPError as exc2:

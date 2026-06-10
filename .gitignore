@@ -11,3 +11,4 @@ data/
 .venv/
 venv/
 .ragas_cache/
+.eval_cache/

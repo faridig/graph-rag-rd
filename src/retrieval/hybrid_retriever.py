@@ -24,6 +24,7 @@ OPTIONAL MATCH (run)-[:USES_INGREDIENT]->(ing:Ingredient)
 OPTIONAL MATCH (run)-[:BELONGS_TO]->(chantier:Chantier)
 RETURN node.text AS text, run.id AS run_id, run.name AS run_name,
        run.objective AS objective, run.synthesis AS synthesis, run.date AS date,
+       run.status AS run_status,
        exp.id AS experiment_id, collect(DISTINCT ing.name) AS ingredients,
        chantier.name AS chantier, score
 ORDER BY score DESC
@@ -40,10 +41,19 @@ OPTIONAL MATCH (run)-[:USES_INGREDIENT]->(ing:Ingredient)
 OPTIONAL MATCH (run)-[:BELONGS_TO]->(ch:Chantier)
 RETURN node.text AS text, run.id AS run_id, run.name AS run_name,
        run.objective AS objective, run.synthesis AS synthesis, run.date AS date,
+       run.status AS run_status,
        exp.id AS experiment_id, collect(DISTINCT ing.name) AS ingredients,
        ch.name AS chantier, score
 ORDER BY score DESC
 """
+
+# RRF (naive) handles mixed query types: exact experiment names (fulltext) and semantic
+# queries (vector) both contribute by rank, avoiding the score-scale dominance issue
+# of linear ranker when a candidate appears in only one index.
+# effective_search_ratio=2: fetch 2× candidates before ranking → better recall.
+_RANKER = "naive"
+_ALPHA = None
+_EFFECTIVE_SEARCH_RATIO = 2
 
 
 class _OpenAIEmbedder(Embedder):
@@ -75,6 +85,7 @@ def _to_dict(record: neo4j.Record) -> dict:
         "text": record["text"],
         "run_id": record["run_id"],
         "run_name": record["run_name"],
+        "run_status": record["run_status"],
         "experiment_id": record["experiment_id"],
         "objective": record["objective"],
         "synthesis": record["synthesis"],
@@ -113,7 +124,10 @@ class HybridNeo4jRetriever:
 
     def _search_hybrid(self, query: str, top_k: int) -> list[dict]:
         result = self._hybrid.get_search_results(
-            query_text=_sanitize_fulltext(query), top_k=top_k
+            query_text=_sanitize_fulltext(query),
+            top_k=top_k,
+            ranker=_RANKER,
+            effective_search_ratio=_EFFECTIVE_SEARCH_RATIO,
         )
         return [_to_dict(r) for r in result.records]
 

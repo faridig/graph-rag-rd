@@ -1,0 +1,193 @@
+/* ACCRO R&D — Charte graphique pour Chainlit */
+
+/* ── Fonts ── */
+@font-face {
+  font-family: "Londrina Solid";
+  src: url("/public/fonts/LondrinaSolid-Black.ttf") format("truetype");
+  font-weight: 900;
+}
+@font-face {
+  font-family: "Londrina Solid";
+  src: url("/public/fonts/LondrinaSolid-Regular.ttf") format("truetype");
+  font-weight: 400;
+}
+@font-face {
+  font-family: "Cocogoose Pro";
+  src: url("/public/fonts/Cocogoose-Pro-Light.ttf") format("truetype");
+  font-weight: 400;
+}
+
+/* ── Color tokens ── */
+:root {
+  --accro-pink:   #e72f7f;
+  --accro-green:  #499b2d;
+  --accro-ink:    #151614;
+  --accro-yellow: #feca21;
+  --accro-cream:  #fbf6ec;
+  --ink-700:      #3a3b37;
+  --ink-500:      #6b6c66;
+  --ink-300:      #a9aaa3;
+  --ink-200:      #d6d6cf;
+  --ink-100:      #ebebe4;
+  --shadow:       4px 4px 0 0 #151614;
+  --shadow-lg:    7px 7px 0 0 #151614;
+}
+
+/* ── Global ── */
+body {
+  font-family: "Cocogoose Pro", "Montserrat", sans-serif !important;
+  background: var(--accro-cream) !important;
+}
+
+/* ── Header / navbar ── */
+header, nav {
+  background: var(--accro-ink) !important;
+  border-bottom: 5px solid var(--accro-pink) !important;
+}
+
+/* App title in header */
+header h1,
+header .title-text,
+.cl-header-title {
+  font-family: "Londrina Solid", "Anton", sans-serif !important;
+  font-weight: 900 !important;
+  font-size: 1.4rem !important;
+  color: var(--accro-yellow) !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+}
+
+/* ── Chat container background ── */
+main, .content, #root > div {
+  background: var(--accro-cream) !important;
+}
+
+/* ── User message bubbles — pink, ink border, asymmetric radius ── */
+.message.user .message-content,
+[data-role="user"] .message-content,
+.user-message {
+  background-color: var(--accro-pink) !important;
+  color: #ffffff !important;
+  border: 3px solid var(--accro-ink) !important;
+  border-radius: 22px 22px 6px 22px !important;
+  box-shadow: var(--shadow) !important;
+}
+[data-role="user"] .message-content p,
+[data-role="user"] .message-content li {
+  color: #ffffff !important;
+}
+
+/* ── Assistant message bubbles — white, ink border, asymmetric radius ── */
+.message.assistant .message-content,
+[data-role="assistant"] .message-content,
+.assistant-message {
+  background-color: #ffffff !important;
+  color: var(--ink-700) !important;
+  border: 3px solid var(--accro-ink) !important;
+  border-radius: 6px 22px 22px 22px !important;
+  box-shadow: var(--shadow) !important;
+}
+[data-role="assistant"] .message-content strong {
+  color: var(--accro-ink);
+}
+[data-role="assistant"] .message-content a {
+  color: var(--accro-green);
+}
+
+/* ── Input composer ── */
+.input-box, .composer, textarea {
+  background: #ffffff !important;
+  border: 3px solid var(--accro-ink) !important;
+  border-radius: 14px !important;
+  box-shadow: 3px 3px 0 0 var(--ink-200) !important;
+  font-family: "Cocogoose Pro", "Montserrat", sans-serif !important;
+  color: var(--ink-700) !important;
+  transition: box-shadow 150ms !important;
+}
+textarea:focus,
+.input-box:focus-within,
+.composer:focus-within {
+  box-shadow: 4px 4px 0 0 var(--accro-pink) !important;
+  outline: none !important;
+}
+
+/* ── Send button ── */
+button[type="submit"],
+.send-button,
+button.primary {
+  background: var(--accro-pink) !important;
+  color: #ffffff !important;
+  border: 3px solid var(--accro-ink) !important;
+  border-radius: 14px !important;
+  box-shadow: var(--shadow) !important;
+  font-family: "Londrina Solid", "Anton", sans-serif !important;
+  font-size: 1rem !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  transition: transform 120ms, box-shadow 120ms !important;
+}
+button[type="submit"]:hover,
+.send-button:hover {
+  transform: translate(-2px, -2px) !important;
+  box-shadow: var(--shadow-lg) !important;
+  background: #c4196a !important;
+}
+button[type="submit"]:active,
+.send-button:active {
+  transform: translate(2px, 2px) !important;
+  box-shadow: none !important;
+}
+
+/* ── Starter buttons (examples) ── */
+.starter, .starters button, .starter-btn {
+  background: #ffffff !important;
+  border: 3px solid var(--accro-ink) !important;
+  border-radius: 14px !important;
+  box-shadow: var(--shadow) !important;
+  font-family: "Cocogoose Pro", "Montserrat", sans-serif !important;
+  font-size: 0.82rem !important;
+  color: var(--ink-700) !important;
+  transition: transform 150ms, box-shadow 150ms !important;
+}
+.starter:hover, .starters button:hover {
+  transform: translate(-2px, -2px) !important;
+  box-shadow: var(--shadow-lg) !important;
+  background: #fff0f8 !important;
+}
+
+/* ── List items in assistant messages ── */
+[data-role="assistant"] .message-content ul {
+  padding-left: 1.2em !important;
+}
+[data-role="assistant"] .message-content li::marker {
+  font-size: 0.65em !important;
+  color: var(--ink-300) !important;
+}
+
+/* ── Scroll-to-bottom floating button ── */
+button[class*="scroll"],
+[class*="scroll-to-bottom"],
+[class*="ScrollToBottom"] {
+  background: var(--accro-pink) !important;
+  border: 2px solid var(--accro-ink) !important;
+  box-shadow: var(--shadow) !important;
+  color: #fff !important;
+}
+
+/* ── Chainlit watermark ── */
+.watermark, [class*="watermark"], [class*="Watermark"] {
+  display: none !important;
+}
+
+/* ── Message action buttons (copy, thumbs) ── */
+.message-actions button,
+[class*="MessageActions"] button {
+  color: var(--ink-300) !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-thumb { background: var(--ink-200); border-radius: 3px; }

@@ -40,8 +40,20 @@ def test_absent_ingredient_returns_fallback(pipeline):
     assert response.found_in_corpus is False
     assert response.answer == FALLBACK_MESSAGE  # exact string match
     assert response.sources == []
-    anthropic_mock.messages.create.assert_not_called()  # aucun appel LLM
+    anthropic_mock.messages.create.assert_not_called()  # aucun appel LLM (pre-LLM gate)
 ```
+
+## Invariant `found_in_corpus=False`
+
+Deux chemins distincts peuvent retourner `found_in_corpus=False` :
+
+| Chemin | Appel LLM | Déclencheur |
+|--------|-----------|-------------|
+| Pre-LLM | Non | dense_score < SCORE_THRESHOLD + exact_lookup vide, absent_topics, absent_experiment |
+| Post-LLM | Oui | `_is_no_data_response()` détecte un refus dans la réponse générée |
+
+`test_no_llm_call_on_fallback` couvre le chemin pre-LLM — c'est intentionnel.
+Le chemin post-LLM est couvert par `test_no_data_response_*`.
 
 ## Règles
 

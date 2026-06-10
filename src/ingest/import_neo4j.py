@@ -143,7 +143,7 @@ def _parse_runs_with_formulation(data: dict, exp_id: str, formulation_key: str) 
                 "name": raw_run.get("name", local_id),
                 "objective": None,
                 "synthesis": notes if isinstance(notes, str) else None,
-                "status": None,
+                "status": raw_run.get("status"),
                 "date": None,
                 "chantier": None,
                 "lead": None,
@@ -333,8 +333,27 @@ def import_source(driver: Driver, data: dict) -> dict:
     return counts
 
 
+_REPERTOIRE_PREFIX = "REPERTOIRE-RD-2025-2026:Run:"
+
+# REPERTOIRE runs whose local ID doesn't match an Experiment.id via simple suffix comparison.
+# Maps local_run_id → list of target experiment IDs.
+_DETAILS_OVERRIDES: dict[str, list[str]] = {
+    # KEFTA-BOULETTES-LAB
+    **{f"KEFTA-{i}": ["KEFTA-BOULETTES-LAB"] for i in range(1, 21)},
+    # MDD-EMINCE-THAI-KEBAB  (PIPE25 rows 19, 20, 31–39)
+    **{f"PIPE25-{i}": ["MDD-EMINCE-THAI-KEBAB"] for i in [19, 20, 31, 32, 33, 34, 35, 36, 37, 38, 39]},
+    # KOBE-1→23
+    "KOBE-1":  ["KOBE-AROMES-GIVAUDAN"],
+    **{f"KOBE-{i}": ["ESSAIS-TVP-HACHE", "TVP-HACHE"] for i in [2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]},
+    "KOBE-9":  ["MORTEAU-ESSAIS-LABO"],
+    "KOBE-23": ["KOBE-2026-AMELIORATIONS"],
+}
+
+
 def build_details_relations(driver: Driver) -> int:
+    total = 0
     with driver.session() as session:
+        # 1. Direct ID match: REPERTOIRE run suffix == Experiment.id
         result = session.run(
             """
             MATCH (run:Run) WHERE run.id STARTS WITH "REPERTOIRE-RD-2025-2026:Run:"
@@ -344,9 +363,33 @@ def build_details_relations(driver: Driver) -> int:
             RETURN count(*) AS cnt
             """
         )
-        count: int = result.single()["cnt"]
-        logger.info("[:DETAILS] edges created/confirmed: %d", count)
-    return count
+        total += result.single()["cnt"]
+
+        # 2. Manual overrides (Jaccard normalization failures)
+        pairs = [
+            {"run_id": _REPERTOIRE_PREFIX + local_id, "exp_id": exp_id}
+            for local_id, exp_ids in _DETAILS_OVERRIDES.items()
+            for exp_id in exp_ids
+        ]
+        if pairs:
+            session.run(
+                """
+                UNWIND $pairs AS p
+                MATCH (run:Run {id: p.run_id})
+                MATCH (exp:Experiment {id: p.exp_id})
+                MERGE (run)-[:DETAILS]->(exp)
+                """,
+                pairs=pairs,
+            )
+
+    # Re-count total after both passes
+    with driver.session() as session:
+        total = session.run(
+            "MATCH (:Run)-[:DETAILS]->(:Experiment) RETURN count(*) AS cnt"
+        ).single()["cnt"]
+
+    logger.info("[:DETAILS] edges total: %d", total)
+    return total
 
 
 def main() -> None:

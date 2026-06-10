@@ -1,0 +1,40 @@
+- generic [ref=e5]:
+  - generic [ref=e6]:
+    - button [ref=e9] [cursor=pointer]:
+      - img
+    - generic [ref=e10]:
+      - button "Lisez-moi" [ref=e11] [cursor=pointer]:
+        - generic [ref=e12]: Lisez-moi
+      - button "Toggle theme" [ref=e13] [cursor=pointer]:
+        - img
+        - generic [ref=e14]: Toggle theme
+  - generic [ref=e18]:
+    - generic [ref=e21]:
+      - article [ref=e33]: Quels sont les résultats de l'essai STRIP-B09 ?
+      - generic [ref=e37]:
+        - img "Avatar for Base de connaissances R&D" [ref=e40]
+        - generic [ref=e56]:
+          - article [ref=e57]: Je n'ai trouvé aucun résultat pour l'essai STRIP-B09 dans le contexte fourni.
+          - article [ref=e58]: "Les seuls essais mentionnés sont :"
+          - list [ref=e59]:
+            - listitem [ref=e60]:
+              - text: STRIP-B09-250415 (avec les runs
+              - code [ref=e61]: BANDE-SHEET-E1-30-01
+              - text: et
+              - code [ref=e62]: AROME-SESSION-1-E2
+              - text: )
+            - listitem [ref=e63]: STRIP-1
+            - listitem [ref=e64]: STRIP-3
+            - listitem [ref=e65]: STRIP-19
+            - listitem [ref=e66]: STRIP-31
+          - article [ref=e67]: Aucune donnée, valeur mesurée ou synthèse n'est associée à un essai nommé exactement "STRIP-B09".
+    - generic [ref=e45]:
+      - textbox "Tapez votre message ici..." [active] [ref=e47]
+      - generic [ref=e48]:
+        - generic [ref=e49]:
+          - generic [ref=e50]:
+            - img
+          - button [disabled]:
+            - img
+        - button [ref=e52] [cursor=pointer]:
+          - img [ref=e53]

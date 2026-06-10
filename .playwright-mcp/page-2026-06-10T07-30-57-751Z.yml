@@ -1,0 +1,105 @@
+- generic [ref=e5]:
+  - generic [ref=e6]:
+    - button [ref=e9] [cursor=pointer]:
+      - img
+    - generic [ref=e10]:
+      - button "Lisez-moi" [ref=e11] [cursor=pointer]:
+        - generic [ref=e12]: Lisez-moi
+      - button "Toggle theme" [ref=e13] [cursor=pointer]:
+        - img
+        - generic [ref=e14]: Toggle theme
+  - generic [ref=e18]:
+    - generic [ref=e21]:
+      - article [ref=e44]: Quel effet a l'huile sur M03 ?
+      - generic [ref=e48]:
+        - img "Avatar for Base de connaissances R&D" [ref=e51]
+        - generic [ref=e66]:
+          - article [ref=e67]: "D'après le contexte fourni, l'effet de l'huile sur la recette M03 (20/80) a été étudié dans l'essai ACE-5 [source: ACE-5:Run:1]."
+          - article [ref=e68]: "Voici les effets observés, basés sur les valeurs dérivées et calculées par rapport à la référence \"Ref M03 sans huile\" :"
+          - list [ref=e69]:
+            - listitem [ref=e70]: "SME, pressions et couple : L'augmentation du taux d'huile diminue la SME, les pressions et le couple. On observe une stabilisation de la SME et du couple à 14% d'huile [source: ACE-5:Run:1]."
+            - listitem [ref=e71]: "Température matière : L'augmentation du taux d'huile diminue la température matière [source: ACE-5:Run:1]."
+            - listitem [ref=e72]: "Procédé : L'effet de pompage s'intensifie avec l'augmentation du taux d'huile. De plus, l'huile exsude sous vide [source: ACE-5:Run:1]."
+            - listitem [ref=e73]: "Absorption en eau : L'absorption diminue avec l'huile lorsque le gluten Roquette est utilisé, mais pas avec le gluten ADM. La synthèse note une interrogation : \"est-ce le changement de gluten ou la mise sous vide qui à modifier l'absorption ?\" [source: ACE-5:Run:1]."
+            - listitem [ref=e74]: "Fermeté et forces de coupe : La fermeté (hardness) et les forces de coupe (cut_T) baissent progressivement avec l'augmentation du taux d'huile [source: ACE-5:Run:1]."
+            - listitem [ref=e75]: "Anisotropie : L'anisotropie reste stable, autour de ~1 [source: ACE-5:Run:1]."
+          - article [ref=e76]: "Les valeurs numériques détaillées pour chaque taux d'huile sont les suivantes [source: ACE-5:Run:1] :"
+          - table [ref=e79]:
+            - rowgroup [ref=e80]:
+              - row "Run Anisotropie cut_T Hardness Water_absorption" [ref=e81]:
+                - columnheader "Run" [ref=e82]
+                - columnheader "Anisotropie" [ref=e83]
+                - columnheader "cut_T" [ref=e84]
+                - columnheader "Hardness" [ref=e85]
+                - columnheader "Water_absorption" [ref=e86]
+            - rowgroup [ref=e87]:
+              - row "M03 4% huile -26.6% -31.4% -5.7% -9.1%" [ref=e88]:
+                - cell "M03 4% huile" [ref=e89]
+                - cell "-26.6%" [ref=e90]
+                - cell "-31.4%" [ref=e91]
+                - cell "-5.7%" [ref=e92]
+                - cell "-9.1%" [ref=e93]
+              - row "M03 6% huile -14.9% -30.7% -9.6% -13.7%" [ref=e94]:
+                - cell "M03 6% huile" [ref=e95]
+                - cell "-14.9%" [ref=e96]
+                - cell "-30.7%" [ref=e97]
+                - cell "-9.6%" [ref=e98]
+                - cell "-13.7%" [ref=e99]
+              - row "M03 8% huile -2.5% -33.1% -19.3% -17.3%" [ref=e100]:
+                - cell "M03 8% huile" [ref=e101]
+                - cell "-2.5%" [ref=e102]
+                - cell "-33.1%" [ref=e103]
+                - cell "-19.3%" [ref=e104]
+                - cell "-17.3%" [ref=e105]
+              - row "M03 10% huile -17.8% -38.9% -24.5% -16.9%" [ref=e106]:
+                - cell "M03 10% huile" [ref=e107]
+                - cell "-17.8%" [ref=e108]
+                - cell "-38.9%" [ref=e109]
+                - cell "-24.5%" [ref=e110]
+                - cell "-16.9%" [ref=e111]
+              - row "M03 12% huile -20.4% -49.2% -26.3% -26.1%" [ref=e112]:
+                - cell "M03 12% huile" [ref=e113]
+                - cell "-20.4%" [ref=e114]
+                - cell "-49.2%" [ref=e115]
+                - cell "-26.3%" [ref=e116]
+                - cell "-26.1%" [ref=e117]
+              - row "M03 14% huile -17.8% -52.2% -34.2% -33.2%" [ref=e118]:
+                - cell "M03 14% huile" [ref=e119]
+                - cell "-17.8%" [ref=e120]
+                - cell "-52.2%" [ref=e121]
+                - cell "-34.2%" [ref=e122]
+                - cell "-33.2%" [ref=e123]
+              - row "M03 16% huile -11.9% -65.2% -39.9% -10.0%" [ref=e124]:
+                - cell "M03 16% huile" [ref=e125]
+                - cell "-11.9%" [ref=e126]
+                - cell "-65.2%" [ref=e127]
+                - cell "-39.9%" [ref=e128]
+                - cell "-10.0%" [ref=e129]
+              - row "M03 18% huile -11.8% -71.4% -58.7% -1.9%" [ref=e130]:
+                - cell "M03 18% huile" [ref=e131]
+                - cell "-11.8%" [ref=e132]
+                - cell "-71.4%" [ref=e133]
+                - cell "-58.7%" [ref=e134]
+                - cell "-1.9%" [ref=e135]
+              - row "M03 20% huile -16.1% -72.8% -63.8% -0.3%" [ref=e136]:
+                - cell "M03 20% huile" [ref=e137]
+                - cell "-16.1%" [ref=e138]
+                - cell "-72.8%" [ref=e139]
+                - cell "-63.8%" [ref=e140]
+                - cell "-0.3%" [ref=e141]
+              - row "M03 14% huile gluten ADM -6.7% -56.1% -41.0% -7.9%" [ref=e142]:
+                - cell "M03 14% huile gluten ADM" [ref=e143]
+                - cell "-6.7%" [ref=e144]
+                - cell "-56.1%" [ref=e145]
+                - cell "-41.0%" [ref=e146]
+                - cell "-7.9%" [ref=e147]
+    - generic [ref=e55]:
+      - textbox "Tapez votre message ici..." [active] [ref=e57]
+      - generic [ref=e58]:
+        - generic [ref=e59]:
+          - generic [ref=e60]:
+            - img
+          - button [disabled]:
+            - img
+        - button [ref=e62] [cursor=pointer]:
+          - img [ref=e63]

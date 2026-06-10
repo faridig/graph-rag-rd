@@ -328,12 +328,20 @@ class RAGPipeline:
             ).single()
             return float(record["score"]) if record else 0.0
 
-    def _generate(self, context: str, question: str) -> tuple[str, int, int]:
+    def _generate(
+        self,
+        context: str,
+        question: str,
+        history: list[dict] | None = None,
+    ) -> tuple[str, int, int]:
+        history_messages = _format_history_messages(history) if history else []
         response = self._llm.chat.completions.create(
             model=LLM_MODEL,
-            max_tokens=2048,
+            max_tokens=4096,
+            temperature=0,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
+                *history_messages,
                 {"role": "user", "content": f"Contexte :\n{context}\n\nQuestion : {question}"},
             ],
         )
@@ -432,6 +440,7 @@ class RAGPipeline:
         question: str,
         top_k: int = TOP_K_DEFAULT,
         chantier: str | None = None,
+        history: list[dict] | None = None,
     ) -> QueryResponse:
         self._maybe_reload_ids()
         if any(t in question.lower() for t in self._absent_topics):
@@ -469,7 +478,7 @@ class RAGPipeline:
                         inv_context = _format_inverse_ref_context(inv_ctx, target_ids)
                         inv_valid_ids = {r["run_id"] for r in inv_ctx if r.get("run_id")}
                         inv_sources = _build_sources(inv_ctx, self._driver, is_exact=True)
-                        answer, in_tok, out_tok = self._generate(inv_context, question)
+                        answer, in_tok, out_tok = self._generate(inv_context, question, history)
                         cited = extract_cited_ids(answer)
                         if not cited and FALLBACK_MESSAGE not in answer:
                             answer, in2, out2 = self._generate(
@@ -626,7 +635,7 @@ class RAGPipeline:
                     )
 
         # ── Generation ────────────────────────────────────────────────────────
-        answer, in_tok, out_tok = self._generate(context, question)
+        answer, in_tok, out_tok = self._generate(context, question, history)
 
         # ── Citation verification ─────────────────────────────────────────────
         cited = extract_cited_ids(answer)
@@ -652,6 +661,7 @@ class RAGPipeline:
         question: str,
         top_k: int = TOP_K_DEFAULT,
         chantier: str | None = None,
+        history: list[dict] | None = None,
     ) -> Iterator[str | QueryResponse]:
         """Yield str chunks during Claude generation, then QueryResponse as final item.
 
@@ -686,7 +696,7 @@ class RAGPipeline:
                         inv_context = _format_inverse_ref_context(inv_ctx, target_ids)
                         inv_valid_ids = {r["run_id"] for r in inv_ctx if r.get("run_id")}
                         inv_sources = _build_sources(inv_ctx, self._driver, is_exact=True)
-                        answer, in_tok, out_tok = self._generate(inv_context, question)
+                        answer, in_tok, out_tok = self._generate(inv_context, question, history)
                         cited = extract_cited_ids(answer)
                         if not cited and FALLBACK_MESSAGE not in answer:
                             answer, in2, out2 = self._generate(
@@ -839,11 +849,14 @@ class RAGPipeline:
         text_chunks: list[str] = []
         in_tok = out_tok = 0
 
+        history_messages = _format_history_messages(history) if history else []
         for chunk in self._llm.chat.completions.create(
             model=LLM_MODEL,
-            max_tokens=2048,
+            max_tokens=4096,
+            temperature=0,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
+                *history_messages,
                 {"role": "user", "content": f"Contexte :\n{context}\n\nQuestion : {question}"},
             ],
             stream=True,
@@ -1425,13 +1438,31 @@ def _build_sources(items: list[dict], driver: Driver, is_exact: bool) -> list[So
 # ── Public API ────────────────────────────────────────────────────────────────
 
 
+def _format_history_messages(history: list[dict]) -> list[dict]:
+    """Convert last 3 Gradio chat exchanges to LLM messages, stripping UI footers."""
+    recent = history[-6:] if len(history) > 6 else history
+    result = []
+    for msg in recent:
+        role = msg.get("role", "")
+        raw = msg.get("content") or ""
+        content = raw if isinstance(raw, str) else " ".join(p if isinstance(p, str) else (p.get("text") or "") for p in raw)
+        content = content.strip()
+        if role == "assistant":
+            idx = content.find("\n\n---\n**Sources**")
+            content = content[:idx].strip() if idx != -1 else content
+        if role in ("user", "assistant") and content:
+            result.append({"role": role, "content": content})
+    return result
+
+
 def stream_query(
     pipeline: RAGPipeline,
     question: str,
     top_k: int = TOP_K_DEFAULT,
     chantier: str | None = None,
+    history: list[dict] | None = None,
 ) -> Iterator[str | QueryResponse]:
-    return pipeline.run_stream(question, top_k=top_k, chantier=chantier)
+    return pipeline.run_stream(question, top_k=top_k, chantier=chantier, history=history)
 
 
 def run_query(
@@ -1439,8 +1470,9 @@ def run_query(
     question: str,
     top_k: int = TOP_K_DEFAULT,
     chantier: str | None = None,
+    history: list[dict] | None = None,
 ) -> QueryResponse:
-    return pipeline.run(question, top_k=top_k, chantier=chantier)
+    return pipeline.run(question, top_k=top_k, chantier=chantier, history=history)
 
 
 def get_dense_score(pipeline: RAGPipeline, query: str) -> float:

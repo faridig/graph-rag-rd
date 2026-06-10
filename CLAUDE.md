@@ -208,20 +208,16 @@ RAG_IDS_CACHE_TTL=300   # TTL cache IDs Neo4j (0 = reload chaque requête)
 
 ---
 
-## MCP — Littérature scientifique
+## Littérature scientifique (CIR)
 
-**Config :** `.mcp.json` (racine projet)
+Intégrée directement dans `src/retrieval/literature.py` — pas de MCP nécessaire.
 
-| Serveur | Base | Démarrage |
-|---------|------|-----------|
-| `semantic-scholar` | 225M papiers | `npx -y @xbghc/semanticscholar-mcp` (auto) |
-| `academic` | PubMed + arXiv + bioRxiv + medRxiv | `~/.claude/tools/Academic-MCP-Server/venv/bin/python` |
+| Source | API | Clé |
+|--------|-----|-----|
+| Semantic Scholar | `semanticscholar` Python client | `SEMANTIC_SCHOLAR_API_KEY` dans `.env` |
+| PubMed | E-utilities HTTP (stdlib) | aucune |
 
-**Usage prévu :** interroger avant génération CIR pour injecter vraies références dans état de l'art.
-**Re-install Academic-MCP si nécessaire :**
-```bash
-cd ~/.claude/tools/Academic-MCP-Server && venv/bin/pip install requests bs4 mcp feedparser beautifulsoup4 PyPDF2
-```
+Cache 1h par groupement. Dégradation gracieuse si une source est indisponible.
 
 ---
 

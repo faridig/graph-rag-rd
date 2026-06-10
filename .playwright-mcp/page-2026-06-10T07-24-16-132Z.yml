@@ -1,0 +1,24 @@
+- generic [ref=e5]:
+  - generic [ref=e6]:
+    - button [ref=e9] [cursor=pointer]:
+      - img
+    - generic [ref=e10]:
+      - button "Lisez-moi" [ref=e11] [cursor=pointer]:
+        - generic [ref=e12]: Lisez-moi
+      - button "Toggle theme" [ref=e13] [cursor=pointer]:
+        - img
+        - generic [ref=e14]: Toggle theme
+  - generic [ref=e18]:
+    - generic [ref=e21]:
+      - article [ref=e33]: Quel effet a l'huile sur M03 ?
+      - img "Avatar for Base de connaissances R&D" [ref=e40]
+    - generic [ref=e45]:
+      - textbox "Tapez votre message ici..." [active] [ref=e47]
+      - generic [ref=e48]:
+        - generic [ref=e49]:
+          - generic [ref=e50]:
+            - img
+          - button [disabled]:
+            - img
+        - button [ref=e52] [cursor=pointer]:
+          - img [ref=e53]
