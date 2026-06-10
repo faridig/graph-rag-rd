@@ -18,7 +18,7 @@ _MAX_ABSTRACT_CHARS = 350
 _CACHE_TTL_S = 3600  # 1 h — évite de rejouer l'API pour le même groupement
 _cache: dict[str, tuple[str, float]] = {}  # groupement -> (result, timestamp)
 _FIELDS_OF_STUDY = ["Agricultural and Food Sciences", "Biology", "Chemistry", "Engineering"]
-_YEAR_FILTER = "2010-"        # papers from 2010 onwards
+_YEAR_FILTER_FROM = 2010      # papers from 2010 onwards (lower bound)
 _MIN_CITATIONS = 3            # filter noise, keep cited work
 _FIELDS = ["title", "authors", "year", "abstract", "citationCount"]
 
@@ -67,14 +67,17 @@ def _pubmed_get(endpoint: str, params: dict) -> bytes:
         return resp.read()
 
 
-def _fetch_pubmed(query: str, limit: int) -> list[dict]:
+def _fetch_pubmed(query: str, limit: int, maxdate: str | None = None) -> list[dict]:
     """Search PubMed and return a list of dicts with title/authors/year/abstract."""
     # Step 1 — esearch: get PMIDs
-    raw = _pubmed_get("esearch.fcgi", {
+    params: dict = {
         "db": "pubmed", "term": query,
         "retmax": limit, "retmode": "json",
         "datetype": "pdat", "mindate": "2010",
-    })
+    }
+    if maxdate:
+        params["maxdate"] = maxdate
+    raw = _pubmed_get("esearch.fcgi", params)
     pmids = json.loads(raw).get("esearchresult", {}).get("idlist", [])
     if not pmids:
         return []
@@ -163,7 +166,7 @@ def _format_paper(p: object | dict) -> str:
     return line
 
 
-def _collect_s2(groupement: str, max_papers: int) -> list[object]:
+def _collect_s2(groupement: str, max_papers: int, year_max: int | None = None) -> list[object]:
     """Fetch papers from Semantic Scholar for the given groupement."""
     queries = _QUERIES.get(groupement, [])
     if not queries:
@@ -172,6 +175,7 @@ def _collect_s2(groupement: str, max_papers: int) -> list[object]:
     seen: set[str] = set()
     papers: list[object] = []
     per_query = max(2, max_papers // len(queries) + 1)
+    year_filter = f"{_YEAR_FILTER_FROM}-{year_max - 1}" if year_max else f"{_YEAR_FILTER_FROM}-"
     for query in queries:
         if len(papers) >= max_papers:
             break
@@ -180,7 +184,7 @@ def _collect_s2(groupement: str, max_papers: int) -> list[object]:
                 query,
                 fields=_FIELDS,
                 fields_of_study=_FIELDS_OF_STUDY,
-                year=_YEAR_FILTER,
+                year=year_filter,
                 min_citation_count=_MIN_CITATIONS,
                 limit=per_query,
             ))
@@ -197,7 +201,7 @@ def _collect_s2(groupement: str, max_papers: int) -> list[object]:
     return papers
 
 
-def _collect_pubmed(groupement: str, max_papers: int) -> list[dict]:
+def _collect_pubmed(groupement: str, max_papers: int, year_max: int | None = None) -> list[dict]:
     """Fetch papers from PubMed for the given groupement."""
     queries = _PUBMED_QUERIES.get(groupement, [])
     if not queries:
@@ -209,7 +213,8 @@ def _collect_pubmed(groupement: str, max_papers: int) -> list[dict]:
         if len(papers) >= max_papers:
             break
         try:
-            results = _fetch_pubmed(query, limit=per_query)
+            maxdate = str(year_max - 1) if year_max else None
+            results = _fetch_pubmed(query, limit=per_query, maxdate=maxdate)
         except Exception as exc:
             _log.warning("PubMed unavailable (%s) — skipping: %s", exc, query)
             continue
@@ -223,24 +228,30 @@ def _collect_pubmed(groupement: str, max_papers: int) -> list[dict]:
     return papers
 
 
-def fetch_literature(groupement: str, max_papers: int = 8) -> str:
+def fetch_literature(groupement: str, max_papers: int = 8, year_max: int | None = None) -> str:
     """Return a formatted literature block to inject into the CIR system prompt.
 
     Queries both Semantic Scholar and PubMed, deduplicates by normalized title,
     sorts by citation count. Returns empty string on failure or unknown groupement.
-    Results are cached 1h per groupement to protect API quotas.
+    Results are cached 1h per (groupement, year_max) pair to protect API quotas.
+
+    Args:
+        year_max: if set, only include papers published strictly before this year.
+                  Use the project start year so the state-of-the-art only covers
+                  knowledge available at the beginning of the R&D campaign.
     """
     if groupement not in _QUERIES and groupement not in _PUBMED_QUERIES:
         return ""
 
-    cached, ts = _cache.get(groupement, ("", 0.0))
+    cache_key = f"{groupement}|{year_max}"
+    cached, ts = _cache.get(cache_key, ("", 0.0))
     if time.time() - ts < _CACHE_TTL_S:
-        _log.debug("literature cache hit for %s", groupement)
+        _log.debug("literature cache hit for %s (year_max=%s)", groupement, year_max)
         return cached
 
     per_source = max(4, max_papers // 2)
-    s2_papers = _collect_s2(groupement, per_source)
-    pubmed_papers = _collect_pubmed(groupement, per_source)
+    s2_papers = _collect_s2(groupement, per_source, year_max=year_max)
+    pubmed_papers = _collect_pubmed(groupement, per_source, year_max=year_max)
 
     # Deduplicate across sources by normalized title
     seen_titles: set[str] = set()
@@ -257,7 +268,7 @@ def fetch_literature(groupement: str, max_papers: int = 8) -> str:
             all_papers.append(p)
 
     if not all_papers:
-        _cache[groupement] = ("", time.time())
+        _cache[cache_key] = ("", time.time())
         return ""
 
     # Sort: S2 papers with citationCount first, then PubMed (no citation count)
@@ -276,9 +287,10 @@ def fetch_literature(groupement: str, max_papers: int = 8) -> str:
     ]))
     result = (
         f"RÉFÉRENCES DE LA LITTÉRATURE SCIENTIFIQUE ({len(batch)} articles — {sources}) :\n"
-        "Ces résumés illustrent l'état de l'art général du domaine. "
-        "Ne citer aucun titre ni auteur dans la fiche sans en avoir vérifié le contenu exact.\n\n"
+        "Ces articles sont fournis pour alimenter la section 1a (état de l'art). "
+        "Pour chaque article cité dans la fiche, reproduire : auteur(s), année, titre exact, "
+        "puis l'apport pertinent en 1-2 phrases. Ne citer que les articles de cette liste.\n\n"
         f"{formatted}"
     )
-    _cache[groupement] = (result, time.time())
+    _cache[cache_key] = (result, time.time())
     return result

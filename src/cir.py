@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 from collections import defaultdict
 from collections.abc import Iterator
@@ -44,6 +45,7 @@ _QUERY_BY_GROUPEMENT = """
 MATCH (rep:Run)
 WHERE rep.cir_grouping = $cir_grouping
   AND rep.id STARTS WITH "REPERTOIRE"
+  AND ($year_prefix IS NULL OR rep.date STARTS WITH $year_prefix)
 OPTIONAL MATCH (rep)-[:DETAILS]->(exp:Experiment)
 OPTIONAL MATCH (exp)-[:HAS_SUMMARY]->(summary:Chunk)
 RETURN rep.id          AS rep_run_id,
@@ -63,6 +65,7 @@ _QUERY_BY_CHANTIER = """
 MATCH (rep:Run)
 WHERE rep.chantier = $chantier
   AND rep.id STARTS WITH "REPERTOIRE"
+  AND ($year_prefix IS NULL OR rep.date STARTS WITH $year_prefix)
 OPTIONAL MATCH (rep)-[:DETAILS]->(exp:Experiment)
 OPTIONAL MATCH (exp)-[:HAS_SUMMARY]->(summary:Chunk)
 RETURN rep.id          AS rep_run_id,
@@ -125,12 +128,19 @@ class _RunRow:
     summary_text: str | None
 
 
-def _fetch_rows(driver: Driver, groupement: str) -> list[_RunRow]:
+def _fetch_rows(
+    driver: Driver, groupement: str, cir_year: int | None = None
+) -> list[_RunRow]:
+    year_prefix = str(cir_year) if cir_year else None
     with driver.session() as session:
         if groupement == "Nouvelles voies de texturation des protéines végétales":
-            records = session.run(_QUERY_BY_CHANTIER, chantier=_CHANTIER_DST).data()
+            records = session.run(
+                _QUERY_BY_CHANTIER, chantier=_CHANTIER_DST, year_prefix=year_prefix
+            ).data()
         else:
-            records = session.run(_QUERY_BY_GROUPEMENT, cir_grouping=groupement).data()
+            records = session.run(
+                _QUERY_BY_GROUPEMENT, cir_grouping=groupement, year_prefix=year_prefix
+            ).data()
     return [
         _RunRow(
             rep_run_id=r["rep_run_id"],
@@ -261,6 +271,18 @@ def _build_header(groupement: str, rows: list[_RunRow]) -> str:
     )
 
 
+def _extract_start_year(rows: list[_RunRow]) -> int | None:
+    """Return the year of the earliest dated run, or None if no dates available."""
+    dates = [r.date for r in rows if r.date]
+    return int(min(dates)[:4]) if dates else None
+
+
+def get_project_start_year(driver: Driver, groupement: str) -> int | None:
+    """Return the year of the earliest run for this groupement (no year filter — full history)."""
+    rows = _fetch_rows(driver, groupement, cir_year=None)
+    return _extract_start_year(rows)
+
+
 def _pick_prompt(groupement: str) -> str:
     if groupement == "Muscles à base de protéines végétales":
         return SYSTEM_PROMPT_CIR_MUSCLES
@@ -275,10 +297,19 @@ def _call_claude(
     header: str,
     context: str,
     literature_context: str | None = None,
+    start_year: int | None = None,
 ) -> tuple[str, int, int]:
     prompt = _pick_prompt(groupement)
     if literature_context:
         prompt = f"{prompt}\n\n{literature_context}"
+    if start_year:
+        prompt = (
+            f"{prompt}\n\n"
+            f"ANNÉE_DÉMARRAGE : {start_year}\n"
+            f"→ Dans §1a, ne citer QUE des publications antérieures à {start_year}. "
+            f"Un article publié en {start_year} ou après n'était pas accessible "
+            f"au démarrage des travaux et ne peut pas fonder le verrou scientifique."
+        )
     user_content = (
         f"En-tête de la fiche (à compléter) :\n{header}\n\n"
         f"Essais R&D disponibles :\n{context}"
@@ -303,7 +334,14 @@ def _build_sources(
     seen: set[str] = set()
     sources: list[CirSource] = []
     for r in rows:
-        key = r.exp_id or r.rep_run_id
+        # Exclude planned runs — not yet realized, not valid evidence in a CIR dossier
+        if r.status and "PLANIFIÉ" in r.status.upper():
+            continue
+        # Exclude RÉPERTOIRE entries with no linked experiment — they have no meaningful
+        # label or SharePoint URL and appear as raw composite IDs in the final document.
+        if r.exp_id is None:
+            continue
+        key = r.exp_id
         if key in seen:
             continue
         seen.add(key)
@@ -311,7 +349,7 @@ def _build_sources(
             CirSource(
                 run_id=r.rep_run_id,
                 experiment_id=r.exp_id,
-                sharepoint_url=urls.get(r.exp_id or ""),
+                sharepoint_url=urls.get(r.exp_id),
             )
         )
     return sources
@@ -346,8 +384,9 @@ def generate_fiche_cir(
 
     header = _build_header(groupement, rows)
     context = _format_context(rows, urls)
+    start_year = _extract_start_year(rows)
     fiche, in_tok, out_tok = _call_claude(
-        anthropic_client, groupement, header, context, literature_context
+        anthropic_client, groupement, header, context, literature_context, start_year
     )
 
     return CirResponse(
@@ -360,14 +399,61 @@ def generate_fiche_cir(
     )
 
 
+_MOCK_FICHE = """\
+DESCRIPTION DE L'OPÉRATION DE R&D — CIR MESRI
+
+**[MODE TEST — aucun token consommé]**
+
+1. Verrou scientifique et état de l'art
+1a. État de l'art
+Contenu fictif pour test.
+
+1b. Verrou scientifique
+Verrou fictif pour test.
+
+2. Démarche expérimentale
+Description fictive des essais.
+
+3. Résultats
+3a. Résultats principaux
+Résultats fictifs.
+
+3b. Essais non concluants
+Aucun essai non concluant dans ce test.
+
+4. Règles opératoires établies
+Règles fictives pour test.
+
+5. Perspectives
+Perspectives fictives.
+"""
+
+
 def stream_fiche_cir(
     driver: Driver,
     anthropic_client: anthropic.Anthropic,
     groupement: str,
     literature_context: str | None = None,
+    cir_year: int | None = None,
 ) -> Iterator[str | CirResponse]:
     """Yield str tokens during generation, then CirResponse as final item."""
-    rows = _fetch_rows(driver, groupement)
+    if os.getenv("CIR_MOCK"):
+        yield _MOCK_FICHE
+        yield CirResponse(
+            groupement=groupement,
+            fiche=_MOCK_FICHE,
+            data_quality=DataQuality(
+                runs_total=0,
+                runs_with_synthesis=0,
+                runs_with_detailed_data=0,
+                completeness_pct=0,
+                warning="[MODE TEST]",
+            ),
+            sources=[],
+        )
+        return
+
+    rows = _fetch_rows(driver, groupement, cir_year=cir_year)
     quality = _compute_quality(rows)
 
     exp_ids = [r.exp_id for r in rows if r.exp_id]
@@ -388,9 +474,18 @@ def stream_fiche_cir(
 
     header = _build_header(groupement, rows)
     context = _format_context(rows, urls)
+    start_year = _extract_start_year(rows)
     prompt = _pick_prompt(groupement)
     if literature_context:
         prompt = f"{prompt}\n\n{literature_context}"
+    if start_year:
+        prompt = (
+            f"{prompt}\n\n"
+            f"ANNÉE_DÉMARRAGE : {start_year}\n"
+            f"→ Dans §1a, ne citer QUE des publications antérieures à {start_year}. "
+            f"Un article publié en {start_year} ou après n'était pas accessible "
+            f"au démarrage des travaux et ne peut pas fonder le verrou scientifique."
+        )
     user_content = (
         f"En-tête de la fiche (à compléter) :\n{header}\n\n"
         f"Essais R&D disponibles :\n{context}"
@@ -423,8 +518,6 @@ def stream_fiche_cir(
     )
 
 
-_SECTION_RE = re.compile(r"^\d+\.\s+[A-ZÀÁÂÈÉÊËÎÏÔÙÛÜ]", re.MULTILINE)
-_SUBSECTION_RE = re.compile(r"^\d+[a-z]\.\s+\S")  # matches "1a. État...", "3b. Essais..."
 _SEPARATOR_RE = re.compile(r"^━+$")
 _MD_BOLD_RE = re.compile(r"\*\*([^*]+)\*\*")
 
@@ -492,23 +585,27 @@ def export_docx(response: CirResponse, output_path: str) -> None:
 
     for line in lines:
         stripped = line.strip()
-        if stripped.startswith("FICHE TECHNIQUE CIR"):
+        clean = _clean(stripped)
+        if clean.startswith("#### "):
             flush()
-            doc.add_heading(stripped, level=1)
-        elif any(stripped.startswith(k) for k in ("Groupement", "Période", "Leads", "Essais")):
+            doc.add_heading(clean[5:], level=3)
+        elif clean.startswith("### "):
             flush()
-            doc.add_paragraph(stripped)
-        elif _SEPARATOR_RE.match(stripped):
+            doc.add_heading(clean[4:], level=2)
+        elif clean.startswith("## "):
             flush()
-        elif stripped == "SOURCES":
+            doc.add_heading(clean[3:], level=1)
+        elif clean.startswith("# "):
+            flush()
+            doc.add_heading(clean[2:], level=1)
+        elif _SEPARATOR_RE.match(clean) or clean == "---":
+            flush()
+        elif clean == "SOURCES":
             flush()
             doc.add_heading("SOURCES", level=2)
-        elif _SECTION_RE.match(stripped):
+        elif any(clean.startswith(k) for k in ("Groupement", "Période", "Leads", "Essais")):
             flush()
-            doc.add_heading(stripped, level=2)
-        elif _SUBSECTION_RE.match(stripped):
-            flush()
-            doc.add_heading(stripped, level=3)
+            doc.add_paragraph(clean)
         else:
             buffer.append(line)
 

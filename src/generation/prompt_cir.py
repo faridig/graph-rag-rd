@@ -25,12 +25,22 @@ RÈGLES DE RÉDACTION MESRI (non négociables — l'auditeur valide sur ces crit
    En revanche, aucune donnée publiée ne couvre [Y] dans les conditions [Z]."
    Ce paragraphe prouve que le verrou n'est pas de l'ingénierie standard.
 
-   SOURCE AUTORISÉE POUR L'ÉTAT DE L'ART : ta connaissance du domaine scientifique
-   (procédés d'extrusion, science des protéines, technologie alimentaire) COMBINÉE
-   au CONTEXTE SCIENTIFIQUE fourni en tête du prompt système. Ne cite aucun titre
-   d'article, auteur ou DOI que tu ne connais pas avec certitude — en cas de doute,
-   rédige sans référence nominative (ex : "Les travaux académiques sur l'HME portent
-   sur des conditions génériques non représentatives des recettes ACCRO").
+   SOURCE POUR L'ÉTAT DE L'ART : utiliser EN PRIORITÉ le bloc
+   "RÉFÉRENCES DE LA LITTÉRATURE SCIENTIFIQUE" fourni en fin de prompt système.
+   Pour chaque article pertinent cité, indiquer : auteur(s) (≤ 3, + "et al."),
+   année entre parenthèses, titre exact entre guillemets, puis apport en 1-2 phrases.
+   Exemple de forme : « Huang et al. (2022), "High-moisture extrusion of plant
+   proteins", montrent que l'anisotropie atteint 1,5 avec des isolats de soja
+   génériques — conditions non transposables aux recettes ACCRO. »
+   Si le bloc RÉFÉRENCES est absent ou vide : rédiger l'état de l'art en termes
+   généraux sans référence nominative.
+   INTERDIT : citer un titre, auteur ou DOI absent du bloc RÉFÉRENCES fourni.
+
+   CONTRAINTE TEMPORELLE OBLIGATOIRE : ne citer dans §1a que des publications
+   antérieures à l'ANNÉE_DÉMARRAGE indiquée en fin de prompt système.
+   L'état de l'art décrit les connaissances DISPONIBLES AU DÉMARRAGE des travaux —
+   pas les articles publiés pendant ou après la campagne. Un article de 2026 ne peut
+   pas justifier un verrou identifié en 2024.
 
 4. SECTION 1 — INCERTITUDE AVANT LES TRAVAUX : après l'état de l'art, énoncer
    l'incertitude depuis le point de vue d'AVANT la campagne d'essais.
@@ -68,12 +78,50 @@ RÈGLES DE RÉDACTION MESRI (non négociables — l'auditeur valide sur ces crit
 
 10. TON : technique, factuel, sans rhétorique promotionnelle.
     Résultat chiffré d'abord, contexte ensuite. Phrases courtes.
+
+11. ESSAIS PROGRAMMÉS / SANS DONNÉES : ne jamais présenter comme résultat un essai
+    annoté "[PLANIFIÉ — non réalisé]" ou dépourvu de mesures chiffrées.
+    Si pertinent pour la continuité chronologique, le mentionner en note :
+    "(essai planifié, non encore réalisé au moment du dépôt)" — sans l'inclure
+    dans les comptages de runs ni dans les conclusions scientifiques.
+
+12. PANEL SENSORIEL : tout score ou verdict sensoriel doit préciser le type de panel
+    (interne ACCRO / panel consommateur externe) et le nombre de participants si
+    disponible. Éviter toute formulation vague ("bien reçu", "apprécié") sans donnée
+    chiffrée ou contextualisation explicite du panel.
+
+13. FORMAT CIROCO — 10 PAGES MAXIMUM : le dossier complet (sections 1 à 5 + Sources)
+    ne doit pas dépasser 10 pages équivalent (~5 000 mots maximum).
+    Structure obligatoire MESRI 2025 :
+    - 1 page : résumé de l'opération (objectif, verrou, résultats-clés, règles)
+    - 3 pages : Section 1 (verrou scientifique) + Section 2 (démarche)
+    - 3 pages : Section 3 (résultats)
+    - 3 pages : Sections 4+5 (connaissances acquises + perspectives) + Sources
+    Être synthétique : un résultat chiffré + sa source = une ligne. Pas de narration.
+    Éliminer toute redondance entre sections. Les données brutes restent dans les
+    fichiers Excel SharePoint sourcés — ne pas les recopier dans le dossier.
+
+14. FORMULATION ORGANOLEPTIQUE PURE (colorants, arômes, épices) : ces activités
+    relèvent de l'optimisation de formulation standard, non éligible CIR selon le
+    BOFIP (BOI-BIC-RICI-10-10-10-20 : "modifications périodiques de produits
+    existants" et "résolution classique de problèmes" = exclus).
+    NE PAS créer d'axe R&D dédié pour la sélection de colorants, arômes ou épices.
+    Si des mesures texturales/procédé (anisotropie, SME, pression) ont été réalisées
+    lors de ces essais, intégrer ces valeurs dans l'axe thématique pertinent.
+    Ignorer les données purement organoleptiques (intensité aromatique, appréciation).
+
+15. LIBÉRATIONS DE LOTS — REFORMULATION OBLIGATOIRE : les essais intitulés
+    "libération de lot" évoquent du contrôle qualité (non éligible CIR).
+    Les reformuler systématiquement comme "Caractérisation de la variabilité
+    inter-lots et de son impact sur les paramètres procédé" — ce qui décrit
+    correctement la question scientifique réelle (prédire l'anisotropie depuis
+    les spécifications fournisseur est impossible : c'est un verrou R&D).
 """.strip()
 
 # ── Format d'en-tête ──────────────────────────────────────────────────────────
 
 _FORMAT = """
-FICHE TECHNIQUE CIR — OPÉRATION DE R&D
+DESCRIPTION DE L'OPÉRATION DE R&D — CIR MESRI
 Groupement : {groupement}
 Période    : {periode}
 Leads      : {leads}
@@ -96,6 +144,10 @@ Essais     : {n_essais}
 4. NOUVELLES CONNAISSANCES ACQUISES
    4a. Apports scientifiques par axe
    4b. Règles opératoires établies (transférables)
+
+5. PERSPECTIVES
+   5a. Questions scientifiques ouvertes
+   5b. Suite recommandée (essais, paramètres, ingrédients)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SOURCES
@@ -124,21 +176,41 @@ SYSTEM_PROMPT_CIR_MUSCLES = (
     + _REGLES_MESRI + "\n"
     "\n"
     "INSTRUCTIONS SPÉCIFIQUES :\n"
-    "- Section 1 (état de l'art) : mentionner que le procédé HME est connu industriellement "
-    "pour texturer les protéines végétales EN GÉNÉRAL, mais que la littérature ne couvre "
-    "pas les interactions entre les paramètres procédé ACCRO (SME, T°, débit) et les "
-    "ingrédients spécifiques (souches protéiques, fibres, liants) utilisés dans les recettes "
-    "M03/FIB/ACE/KOBE. C'est cette limite précise qui constitue le verrou.\n"
-    "- Section 1 (distinction R&D) : conclure en expliquant que transposer les paramètres "
-    "publiés à une nouvelle recette ACCRO ne garantit pas le résultat — les interactions "
-    "non-linéaires rendent l'optimisation expérimentale obligatoire.\n"
+    "- Section 1a (état de l'art) : s'appuyer sur le bloc RÉFÉRENCES injecté pour citer "
+    "les travaux sur l'HME (anisotropie, SME, texturation) avec auteur/année/titre exact. "
+    "Mentionner ensuite la limite précise : la littérature ne couvre pas les interactions "
+    "entre les paramètres procédé ACCRO (SME, T°, débit) et les ingrédients spécifiques "
+    "(souches protéiques, fibres, liants) des recettes M03/FIB/ACE/KOBE.\n"
+    "- Section 1b : formuler l'incertitude depuis le point de vue d'AVANT les essais : "
+    "\"On ignorait si/comment [ingrédient X] se comporterait dans la matrice HME ACCRO "
+    "aux niveaux d'hydratation [Y%].\"\n"
+    "- Section 1c (distinction R&D) : expliquer que les mécanismes physico-chimiques "
+    "impliqués (dénaturation protéique sous cisaillement, gélification par réarrangement "
+    "des chaînes, interactions fibres/liants avec la matrice) ne sont pas linéaires dans "
+    "les conditions HME ACCRO — transposer des paramètres publiés à une nouvelle recette "
+    "ne garantit pas le résultat, l'expérimentation reste obligatoire.\n"
     "- Section 2 : structurer par chantier (ex. M03, FIB, ACE…). Pour chaque chantier, "
     "énoncer l'hypothèse testée AVANT les essais, puis indiquer les paramètres variés.\n"
     "- Section 3 : pour chaque résultat significatif, indiquer la valeur de référence "
     "(run sans l'ingrédient testé) et la valeur modifiée. Sous-paragraphe obligatoire "
     "\"Essais non concluants ou partiels\".\n"
-    "- Section 4 : clore par des règles du type "
+    "- Section 4a : cadrer les apports comme \"Pour la première fois dans les conditions "
+    "ACCRO, on établit que [X]\" — cette formulation ancre la nouveauté de la connaissance.\n"
+    "- Section 4b : règles du type "
     "\"Au-delà de X% de [ingrédient], [propriété] chute de Y% quelle que soit la recette.\"\n"
+    "- Section 5 : identifier les questions restées ouvertes et proposer 2-3 essais "
+    "prioritaires pour la prochaine campagne.\n"
+    "- Essais STRIP (colorants, arômes, épices) : ne PAS créer d'axe R&D dédié "
+    "(cf. Règle 14 — non éligible BOFIP). Intégrer uniquement les mesures "
+    "texturales/procédé (anisotropie, SME, pression filière) dans l'axe pertinent. "
+    "Ignorer les données purement organoleptiques (intensité arôme, appréciation).\n"
+    "- DST : toujours nommer 'Direct Shear Technology (Sheartex, Sobatech)' — "
+    "jamais 'Direct Steam Treatment'. Le principe est le cisaillement haute T°, "
+    "pas la vapeur.\n"
+    "- FIPROVEX : si présent dans les données, préciser la nature du programme : "
+    "collaboration avec une institution académique (INRAE, université…) ou programme "
+    "interne ACCRO ? Une collaboration académique renforce la qualification R&D — "
+    "l'indiquer explicitement. Si l'information est absente : '⚠ Nature du programme à préciser'.\n"
     "- Section SOURCES : liste run_id + lien SharePoint si disponible.\n"
 )
 
@@ -166,25 +238,31 @@ SYSTEM_PROMPT_CIR_PRODUITS = (
     + _REGLES_MESRI + "\n"
     "\n"
     "INSTRUCTIONS SPÉCIFIQUES :\n"
-    "- Section 1 (état de l'art) : rappeler que la science de la formulation des produits "
-    "carnés (jutosité, cohésion, Maillard) est bien documentée pour les protéines animales, "
-    "mais que les modèles établis (réseau myosinique, collagène, réactions de Maillard en "
-    "conditions industrielles viande) ne sont PAS transposables aux protéines végétales "
-    "texturées HME. La littérature traite les protéines végétales en conditions de "
-    "laboratoire, pas en contexte industriel ACCRO avec les recettes et procédés spécifiques.\n"
-    "- Section 1 (distinction R&D) : conclure en expliquant que chaque nouvelle référence "
-    "produit constitue une formulation dont le résultat sensoriel est non prévisible avant "
-    "dégustation — ce n'est pas de l'optimisation de recette connue, c'est la découverte "
-    "d'une fenêtre de formulation inconnue.\n"
+    "- Section 1a (état de l'art) : s'appuyer sur le bloc RÉFÉRENCES injecté pour citer "
+    "les travaux sur la formulation de produits à base de protéines végétales texturées "
+    "(rétention d'eau, cohésion, développement aromatique) avec auteur/année/titre exact. "
+    "Souligner la limite : les modèles établis (réseau myosinique, collagène, Maillard "
+    "industriel viande) ne sont pas transposables aux protéines végétales HME dans "
+    "les conditions ACCRO.\n"
+    "- Section 1b : formuler l'incertitude avant les essais : \"On ignorait si [liant X / "
+    "protocole Y] permettrait d'atteindre [rétention d'eau / cohésion] comparable à "
+    "la viande dans les conditions ACCRO.\"\n"
+    "- Section 1c (distinction R&D) : chaque nouvelle référence produit constitue une "
+    "formulation dont le résultat sensoriel est non prévisible avant dégustation — pas "
+    "de l'optimisation de recette connue mais la découverte d'une fenêtre de formulation.\n"
     "- Section 2 : structurer par famille produit (émincés, boulettes, galettes, "
     "saucisseries, panés…). Pour chaque famille, énoncer l'hypothèse de formulation "
     "testée AVANT de décrire les essais.\n"
     "- Section 3 : pour les formulations testées en dégustation, indiquer le verdict "
-    "(validé / rejeté / en cours) et les scores sensoriels si disponibles. "
+    "(validé / rejeté / en cours) et les scores sensoriels si disponibles avec type "
+    "de panel et nombre de participants. "
     "Sous-paragraphe obligatoire \"Formulations rejetées en dégustation\" — "
     "ces rejets prouvent l'incertitude réelle.\n"
-    "- Section 4 : clore par des règles transférables du type "
+    "- Section 4a : cadrer les apports comme \"Pour la première fois dans les conditions "
+    "ACCRO, on établit que [X].\"\n"
+    "- Section 4b : règles transférables du type "
     "\"Pour obtenir [propriété] avec [famille protéine], [règle opératoire].\"\n"
+    "- Section 5 : questions ouvertes restantes + 2-3 axes prioritaires pour la suite.\n"
     "- Section SOURCES : liste run_id + lien SharePoint si disponible.\n"
 )
 
@@ -211,26 +289,29 @@ SYSTEM_PROMPT_CIR_NOUVELLES_VOIES = (
     + _REGLES_MESRI + "\n"
     "\n"
     "INSTRUCTIONS SPÉCIFIQUES :\n"
-    "- Section 1 (état de l'art) : mentionner que la technologie DST (Direct Shear "
-    "Technology / Sheartex / Sobatech) est documentée par son fournisseur pour des "
-    "recettes génériques, et que quelques publications académiques décrivent le principe "
-    "de cisaillement à haute température pour la texturation. Préciser ensuite la limite "
-    "précise : aucune donnée publiée ni communication industrielle ne couvre le couple "
-    "procédé DST / recettes ACCRO (M03, P01, souches protéiques, niveaux d'hydratation, "
-    "ingrédients spécifiques). Les paramètres Sobatech sont des valeurs de démarrage "
-    "génériques, non validées pour les conditions ACCRO.\n"
-    "- Section 1 (distinction R&D) : conclure en expliquant que démarrer avec les "
-    "paramètres fournisseur constitue un point de départ, non une solution — la fenêtre "
-    "de fibration pour les recettes ACCRO est entièrement à découvrir par expérimentation.\n"
+    "- Section 1a (état de l'art) : s'appuyer sur le bloc RÉFÉRENCES injecté pour citer "
+    "les travaux sur la texturation par cisaillement à haute température (shear cell, DST) "
+    "avec auteur/année/titre exact. Mentionner ensuite la limite : aucune donnée publiée "
+    "ni communication industrielle ne couvre le couple procédé DST / recettes ACCRO (M03, "
+    "P01, souches protéiques, niveaux d'hydratation spécifiques). Les paramètres Sobatech "
+    "sont des valeurs de démarrage génériques, non validées pour les conditions ACCRO.\n"
+    "- Section 1b : formuler l'incertitude avant les essais : \"On ignorait si le procédé "
+    "DST permettrait d'obtenir une fibration acceptable avec les recettes ACCRO et à quels "
+    "paramètres (T°, débit, vitesse rotor).\"\n"
+    "- Section 1c (distinction R&D) : démarrer avec les paramètres fournisseur constitue "
+    "un point de départ, non une solution — la fenêtre de fibration pour les recettes ACCRO "
+    "est entièrement à découvrir, les interactions DST/ingrédients étant inexplorées.\n"
     "- Section 2 : ordre chronologique des essais exploratoires. Pour chaque étape, "
     "énoncer l'hypothèse testée (ex. \"Hypothèse : augmenter T° de X à Y°C améliorerait "
     "la fibration\") AVANT de décrire les paramètres variés et résultats obtenus.\n"
     "- Section 3 : distinguer les runs avec fibration obtenue / partielle / absente. "
     "Sous-paragraphe \"Runs sans fibration\" obligatoire. "
     "Toute valeur de texture ou d'anisotropie mesurée doit être citée.\n"
-    "- Section 4 : même partielle, toute connaissance sur la fenêtre de fibration DST "
-    "est valorisable. Règle : \"On sait désormais que la fibration DST requiert [conditions]"
-    " — hors de ces conditions, [résultat observé].\"\n"
+    "- Section 4a : cadrer les apports comme \"Pour la première fois dans les conditions "
+    "ACCRO, on établit que [X].\"\n"
+    "- Section 4b : règle de fenêtre de fibration : \"On sait désormais que la fibration DST "
+    "requiert [conditions] — hors de ces conditions, [résultat observé].\"\n"
+    "- Section 5 : paramètres et ingrédients non encore testés, suite recommandée.\n"
     "- Section SOURCES : liste run_id + lien SharePoint si disponible.\n"
 )
 

@@ -18,9 +18,9 @@ from src.cir import (
     CirResponse,
     build_cir_clients,
     export_docx,
+    get_project_start_year,
     stream_fiche_cir,
 )
-from src.retrieval.literature import fetch_literature
 from src.generation.rag_pipeline import (
     QueryResponse,
     build_pipeline,
@@ -28,6 +28,7 @@ from src.generation.rag_pipeline import (
     stream_query,
 )
 from src.models import Source
+from src.retrieval.literature import fetch_literature
 
 _log = logging.getLogger(__name__)
 _RUN_ID_RE = re.compile(r"\[source:\s*([^\]]+)\]")
@@ -130,7 +131,7 @@ async def set_starters() -> list[cl.Starter]:
 
 async def _show_cir_groupement_picker() -> None:
     actions = [
-        cl.Action(name="cir_groupement", value=GROUPEMENTS_VALIDES[i], label=_CIR_LABELS[i])
+        cl.Action(name="cir_groupement", value=GROUPEMENTS_VALIDES[i], label=_CIR_LABELS[i], payload={"groupement": GROUPEMENTS_VALIDES[i]})
         for i in range(len(GROUPEMENTS_VALIDES))
     ]
     await cl.Message(
@@ -142,19 +143,55 @@ async def _show_cir_groupement_picker() -> None:
 @cl.action_callback("cir_groupement")
 async def on_cir_groupement(action: cl.Action) -> None:
     await action.remove()
-    groupement = action.value
-    await _run_cir_generation(groupement)
+    groupement = (action.payload or {}).get("groupement") or getattr(action, "value", None) or ""
+    await _show_cir_year_picker(groupement)
 
 
-async def _run_cir_generation(groupement: str) -> None:
+async def _show_cir_year_picker(groupement: str) -> None:
+    current_year = 2026
+    years = [current_year - 1, current_year, current_year - 2]  # 2025, 2026, 2024
+    actions = [
+        cl.Action(
+            name="cir_year",
+            value=str(y),
+            label=f"{y}" + (" (recommandé)" if y == current_year - 1 else ""),
+            payload={"groupement": groupement, "year": y},
+        )
+        for y in years
+    ]
+    await cl.Message(
+        content=f"Groupement : **{groupement}**\nQuelle année fiscale CIR ?",
+        actions=actions,
+    ).send()
+
+
+@cl.action_callback("cir_year")
+async def on_cir_year(action: cl.Action) -> None:
+    await action.remove()
+    payload = action.payload or {}
+    groupement = payload.get("groupement") or ""
+    cir_year = int(payload.get("year") or 0) or None
+    await _run_cir_generation(groupement, cir_year=cir_year)
+
+
+async def _run_cir_generation(groupement: str, cir_year: int | None = None) -> None:
     loop = asyncio.get_event_loop()
     queue: asyncio.Queue = asyncio.Queue()
+
+    # Date de démarrage du projet (pour filtrer la littérature antérieure)
+    start_year: int | None = None
+    try:
+        start_year = await asyncio.to_thread(get_project_start_year, _cir_driver, groupement)
+    except Exception:
+        _log.warning("get_project_start_year failed, proceeding without year filter", exc_info=True)
 
     # Pré-requête littérature (Semantic Scholar) avant de lancer le LLM
     literature_context: str | None = None
     async with cl.Step(name="Recherche littérature scientifique…", show_input=False) as lit_step:
         try:
-            literature_context = await asyncio.to_thread(fetch_literature, groupement)
+            literature_context = await asyncio.to_thread(
+                fetch_literature, groupement, 8, start_year
+            )
             n = literature_context.count("\n- ") if literature_context else 0
             lit_step.output = f"{n} article(s) trouvé(s)" if n else "Aucun article (API indisponible)"
         except Exception:
@@ -172,7 +209,7 @@ async def _run_cir_generation(groupement: str) -> None:
     def _produce() -> None:
         try:
             for item in stream_fiche_cir(
-                _cir_driver, _cir_anthropic, groupement, literature_context
+                _cir_driver, _cir_anthropic, groupement, literature_context, cir_year
             ):
                 asyncio.run_coroutine_threadsafe(queue.put(item), loop).result()
         except Exception:
@@ -212,7 +249,12 @@ async def _run_cir_generation(groupement: str) -> None:
     cl.user_session.set("tmp_files", tmp_files)
 
     safe_name = groupement.replace(" ", "_")[:40]
-    elements = [cl.File(name=f"fiche_CIR_{safe_name}.docx", path=tmp_path, display="inline")]
+    elements = [cl.File(
+        name=f"fiche_CIR_{safe_name}.docx",
+        path=tmp_path,
+        display="side",
+        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )]
 
     # Avertissement qualité + lien téléchargement dans un seul message
     warning_prefix = (
