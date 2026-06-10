@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 
 from semanticscholar import SemanticScholar
 
 _log = logging.getLogger(__name__)
 
 _MAX_ABSTRACT_CHARS = 350
+_CACHE_TTL_S = 3600  # 1 h — évite de rejouer l'API pour le même groupement
+_cache: dict[str, tuple[str, float]] = {}  # groupement -> (result, timestamp)
 _FIELDS_OF_STUDY = ["Agricultural and Food Sciences", "Biology", "Chemistry", "Engineering"]
 _YEAR_FILTER = "2010-"        # papers from 2010 onwards
 _MIN_CITATIONS = 3            # filter noise, keep cited work
@@ -69,6 +72,11 @@ def fetch_literature(groupement: str, max_papers: int = 6) -> str:
     if not queries:
         return ""
 
+    cached, ts = _cache.get(groupement, ("", 0.0))
+    if time.time() - ts < _CACHE_TTL_S:
+        _log.debug("literature cache hit for %s", groupement)
+        return cached
+
     sch = _build_client()
     seen: set[str] = set()
     papers: list[object] = []
@@ -101,6 +109,7 @@ def fetch_literature(groupement: str, max_papers: int = 6) -> str:
                 break
 
     if not papers:
+        _cache[groupement] = ("", time.time())
         return ""
 
     batch = papers[:max_papers]
@@ -108,9 +117,11 @@ def fetch_literature(groupement: str, max_papers: int = 6) -> str:
     batch.sort(key=lambda p: getattr(p, "citationCount", 0) or 0, reverse=True)
     formatted = "\n".join(_format_paper(p) for p in batch)
     n = len(batch)
-    return (
+    result = (
         f"RÉFÉRENCES DE LA LITTÉRATURE SCIENTIFIQUE ({n} articles — Semantic Scholar) :\n"
         "Ces résumés illustrent l'état de l'art général du domaine. "
         "Ne citer aucun titre ni auteur dans la fiche sans en avoir vérifié le contenu exact.\n\n"
         f"{formatted}"
     )
+    _cache[groupement] = (result, time.time())
+    return result
