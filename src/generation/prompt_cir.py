@@ -114,6 +114,31 @@ RÈGLES DE RÉDACTION MESRI (non négociables — l'auditeur valide sur ces crit
     inter-lots et de son impact sur les paramètres procédé" — ce qui décrit
     correctement la question scientifique réelle (prédire l'anisotropie depuis
     les spécifications fournisseur est impossible : c'est un verrou R&D).
+
+16. NOUVEAUTÉ — ANCRAGE LITTÉRATURE OBLIGATOIRE :
+    La formulation "pour la première fois dans les conditions ACCRO" est INTERDITE.
+    Elle évoque une nouveauté purement interne (ingénierie) et non scientifique :
+    un auditeur MESRI averti la rejettera systématiquement.
+    À la place, ancrer la nouveauté sur la littérature :
+    "Aucune publication identifiée ne couvre [X] pour ce couple ingrédient/procédé"
+    ou "La littérature ne documente pas [relation X/Y] dans ces conditions."
+    Si la littérature fournie couvre partiellement le sujet, préciser la limite :
+    "Les travaux de [auteur] portent sur des conditions génériques non transposables
+    aux recettes ACCRO — le résultat observé [Y] n'était pas prévisible."
+
+17. COHÉRENCE SECTION 2 ↔ SECTION 3 :
+    Les axes nommés en Section 3 doivent correspondre exactement aux axes définis
+    en Section 2. Si un résultat porte sur une variable non couverte par un axe
+    existant en Section 2, créer cet axe en Section 2 avant de l'utiliser en
+    Section 3. Ne jamais introduire un nouvel axe uniquement en Section 3.
+
+18. SOURCES — PÉRIMÈTRE STRICT DE L'OPÉRATION :
+    En section SOURCES, n'inclure que les essais directement liés à l'opération
+    documentée (même groupement, même technologie de base).
+    Exclure tout essai hors-scope : autre espèce animale (poisson, viande), autre
+    chantier sans lien scientifique avec l'opération, autre ligne produit.
+    Un essai "bâtonnet de poisson" ou "marinade" n'a aucune place dans une fiche
+    sur les muscles végétaux HME ou les protéines végétales texturées.
 """.strip()
 
 # ── Format d'en-tête ──────────────────────────────────────────────────────────
@@ -192,8 +217,9 @@ SYSTEM_PROMPT_CIR_MUSCLES = (
     "- Section 3 : pour chaque résultat significatif, indiquer la valeur de référence "
     "(run sans l'ingrédient testé) et la valeur modifiée. Sous-paragraphe obligatoire "
     "\"Essais non concluants ou partiels\".\n"
-    "- Section 4a : cadrer les apports comme \"Pour la première fois dans les conditions "
-    "ACCRO, on établit que [X]\" — cette formulation ancre la nouveauté de la connaissance.\n"
+    "- Section 4a : ancrer les apports sur la littérature (cf. Règle 16) : "
+    "\"Aucune publication identifiée ne couvre [X] dans ces conditions — "
+    "on établit désormais que [Y].\"\n"
     "- Section 4b : règles du type "
     "\"Au-delà de X% de [ingrédient], [propriété] chute de Y% quelle que soit la recette.\"\n"
     "- Section 5 : identifier les questions restées ouvertes et proposer 2-3 essais "
@@ -256,8 +282,9 @@ SYSTEM_PROMPT_CIR_PRODUITS = (
     "de panel et nombre de participants. "
     "Sous-paragraphe obligatoire \"Formulations rejetées en dégustation\" — "
     "ces rejets prouvent l'incertitude réelle.\n"
-    "- Section 4a : cadrer les apports comme \"Pour la première fois dans les conditions "
-    "ACCRO, on établit que [X].\"\n"
+    "- Section 4a : ancrer les apports sur la littérature (cf. Règle 16) : "
+    "\"Aucune publication identifiée ne couvre [X] dans ces conditions — "
+    "on établit désormais que [Y].\"\n"
     "- Section 4b : règles transférables du type "
     "\"Pour obtenir [propriété] avec [famille protéine], [règle opératoire].\"\n"
     "- Section 5 : questions ouvertes restantes + 2-3 axes prioritaires pour la suite.\n"
@@ -305,8 +332,9 @@ SYSTEM_PROMPT_CIR_NOUVELLES_VOIES = (
     "- Section 3 : distinguer les runs avec fibration obtenue / partielle / absente. "
     "Sous-paragraphe \"Runs sans fibration\" obligatoire. "
     "Toute valeur de texture ou d'anisotropie mesurée doit être citée.\n"
-    "- Section 4a : cadrer les apports comme \"Pour la première fois dans les conditions "
-    "ACCRO, on établit que [X].\"\n"
+    "- Section 4a : ancrer les apports sur la littérature (cf. Règle 16) : "
+    "\"Aucune publication identifiée ne couvre [X] dans ces conditions — "
+    "on établit désormais que [Y].\"\n"
     "- Section 4b : règle de fenêtre de fibration : \"On sait désormais que la fibration DST "
     "requiert [conditions] — hors de ces conditions, [résultat observé].\"\n"
     "- Section 5 : paramètres et ingrédients non encore testés, suite recommandée.\n"
