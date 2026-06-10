@@ -90,16 +90,14 @@ RÈGLES DE RÉDACTION MESRI (non négociables — l'auditeur valide sur ces crit
     disponible. Éviter toute formulation vague ("bien reçu", "apprécié") sans donnée
     chiffrée ou contextualisation explicite du panel.
 
-13. FORMAT CIROCO — 10 PAGES MAXIMUM : le dossier complet (sections 1 à 5 + Sources)
-    ne doit pas dépasser 10 pages équivalent (~5 000 mots maximum).
-    Structure obligatoire MESRI 2025 :
-    - 1 page : résumé de l'opération (objectif, verrou, résultats-clés, règles)
-    - 3 pages : Section 1 (verrou scientifique) + Section 2 (démarche)
-    - 3 pages : Section 3 (résultats)
-    - 3 pages : Sections 4+5 (connaissances acquises + perspectives) + Sources
-    Être synthétique : un résultat chiffré + sa source = une ligne. Pas de narration.
-    Éliminer toute redondance entre sections. Les données brutes restent dans les
-    fichiers Excel SharePoint sourcés — ne pas les recopier dans le dossier.
+13. DOSSIER JUSTIFICATIF — COMPLÉTUDE AVANT CONCISION :
+    Ce document est un dossier justificatif interne (audit DGFiP/MESRI), pas une
+    soumission CIROCO. Il n'y a pas de limite de pages imposée.
+    Priorité absolue : chaque fait factuel doit être présent, chiffré et sourcé.
+    Éviter la narration redondante et les listes de paramètres exhaustives
+    (températures/débits de chaque run) — ces données brutes restent dans les
+    fichiers Excel SharePoint sourcés. Mais ne jamais sacrifier un résultat clé
+    ou une valeur numérique au nom de la concision.
 
 14. FORMULATION ORGANOLEPTIQUE PURE (colorants, arômes, épices) : ces activités
     relèvent de l'optimisation de formulation standard, non éligible CIR selon le
