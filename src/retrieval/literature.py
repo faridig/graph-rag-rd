@@ -128,16 +128,31 @@ def _build_client() -> SemanticScholar:
     return SemanticScholar(api_key=api_key, timeout=10, retry=False)
 
 
-def _format_paper(p: object) -> str:
-    title = getattr(p, "title", None) or "Sans titre"
-    year = getattr(p, "year", None) or "?"
-    raw_authors = getattr(p, "authors", None) or []
-    names = [getattr(a, "name", "") for a in raw_authors[:3]]
-    authors = ", ".join(names) + (" et al." if len(raw_authors) > 3 else "")
-    abstract = (getattr(p, "abstract", None) or "").strip()
+def _normalize_title(title: str) -> str:
+    """Lowercase + strip punctuation for deduplication across sources."""
+    return "".join(c for c in title.lower() if c.isalnum() or c == " ").strip()
+
+
+def _format_paper(p: object | dict) -> str:
+    """Format a paper from either Semantic Scholar (object) or PubMed (dict)."""
+    if isinstance(p, dict):
+        title = p.get("title") or "Sans titre"
+        year = p.get("year") or "?"
+        raw_authors = p.get("authors") or []
+        authors = ", ".join(raw_authors[:3]) + (" et al." if len(raw_authors) > 3 else "")
+        abstract = (p.get("abstract") or "").strip()
+        citations = None
+    else:
+        title = getattr(p, "title", None) or "Sans titre"
+        year = getattr(p, "year", None) or "?"
+        raw_authors = getattr(p, "authors", None) or []
+        names = [getattr(a, "name", "") for a in raw_authors[:3]]
+        authors = ", ".join(names) + (" et al." if len(raw_authors) > 3 else "")
+        abstract = (getattr(p, "abstract", None) or "").strip()
+        citations = getattr(p, "citationCount", None)
+
     if len(abstract) > _MAX_ABSTRACT_CHARS:
         abstract = abstract[:_MAX_ABSTRACT_CHARS].rsplit(" ", 1)[0] + "…"
-    citations = getattr(p, "citationCount", None)
     line = f"- {title} ({year})"
     if authors:
         line += f" — {authors}"
@@ -148,32 +163,19 @@ def _format_paper(p: object) -> str:
     return line
 
 
-def fetch_literature(groupement: str, max_papers: int = 6) -> str:
-    """Return a formatted literature block to inject into the CIR system prompt.
-
-    Returns an empty string if the groupement is unknown or the API is unavailable.
-    Retries automatically on HTTP 429 (handled by the semanticscholar client).
-    """
+def _collect_s2(groupement: str, max_papers: int) -> list[object]:
+    """Fetch papers from Semantic Scholar for the given groupement."""
     queries = _QUERIES.get(groupement, [])
     if not queries:
-        return ""
-
-    cached, ts = _cache.get(groupement, ("", 0.0))
-    if time.time() - ts < _CACHE_TTL_S:
-        _log.debug("literature cache hit for %s", groupement)
-        return cached
-
+        return []
     sch = _build_client()
     seen: set[str] = set()
     papers: list[object] = []
     per_query = max(2, max_papers // len(queries) + 1)
-
     for query in queries:
         if len(papers) >= max_papers:
             break
         try:
-            # list() forces full evaluation here — PaginatedResults is lazy,
-            # so HTTP errors would otherwise surface during iteration below.
             results = list(sch.search_paper(
                 query,
                 fields=_FIELDS,
@@ -183,9 +185,8 @@ def fetch_literature(groupement: str, max_papers: int = 6) -> str:
                 limit=per_query,
             ))
         except Exception as exc:
-            _log.warning("Semantic Scholar unavailable (%s) — skipping query: %s", exc, query)
+            _log.warning("Semantic Scholar unavailable (%s) — skipping: %s", exc, query)
             continue
-
         for p in results:
             pid = getattr(p, "paperId", None) or getattr(p, "title", "")
             if pid and pid not in seen and getattr(p, "title", None):
@@ -193,18 +194,88 @@ def fetch_literature(groupement: str, max_papers: int = 6) -> str:
                 papers.append(p)
             if len(papers) >= max_papers:
                 break
+    return papers
 
-    if not papers:
+
+def _collect_pubmed(groupement: str, max_papers: int) -> list[dict]:
+    """Fetch papers from PubMed for the given groupement."""
+    queries = _PUBMED_QUERIES.get(groupement, [])
+    if not queries:
+        return []
+    seen: set[str] = set()
+    papers: list[dict] = []
+    per_query = max(2, max_papers // len(queries) + 1)
+    for query in queries:
+        if len(papers) >= max_papers:
+            break
+        try:
+            results = _fetch_pubmed(query, limit=per_query)
+        except Exception as exc:
+            _log.warning("PubMed unavailable (%s) — skipping: %s", exc, query)
+            continue
+        for p in results:
+            pid = p.get("pmid") or p.get("title", "")
+            if pid and pid not in seen and p.get("title"):
+                seen.add(str(pid))
+                papers.append(p)
+            if len(papers) >= max_papers:
+                break
+    return papers
+
+
+def fetch_literature(groupement: str, max_papers: int = 8) -> str:
+    """Return a formatted literature block to inject into the CIR system prompt.
+
+    Queries both Semantic Scholar and PubMed, deduplicates by normalized title,
+    sorts by citation count. Returns empty string on failure or unknown groupement.
+    Results are cached 1h per groupement to protect API quotas.
+    """
+    if groupement not in _QUERIES and groupement not in _PUBMED_QUERIES:
+        return ""
+
+    cached, ts = _cache.get(groupement, ("", 0.0))
+    if time.time() - ts < _CACHE_TTL_S:
+        _log.debug("literature cache hit for %s", groupement)
+        return cached
+
+    per_source = max(4, max_papers // 2)
+    s2_papers = _collect_s2(groupement, per_source)
+    pubmed_papers = _collect_pubmed(groupement, per_source)
+
+    # Deduplicate across sources by normalized title
+    seen_titles: set[str] = set()
+    all_papers: list[object | dict] = []
+    for p in s2_papers:
+        norm = _normalize_title(getattr(p, "title", "") or "")
+        if norm and norm not in seen_titles:
+            seen_titles.add(norm)
+            all_papers.append(p)
+    for p in pubmed_papers:
+        norm = _normalize_title(p.get("title", "") or "")
+        if norm and norm not in seen_titles:
+            seen_titles.add(norm)
+            all_papers.append(p)
+
+    if not all_papers:
         _cache[groupement] = ("", time.time())
         return ""
 
-    batch = papers[:max_papers]
-    # Sort by citation count descending so the most-cited appear first
-    batch.sort(key=lambda p: getattr(p, "citationCount", 0) or 0, reverse=True)
+    # Sort: S2 papers with citationCount first, then PubMed (no citation count)
+    all_papers.sort(
+        key=lambda p: getattr(p, "citationCount", None) or 0
+        if not isinstance(p, dict) else 0,
+        reverse=True,
+    )
+    batch = all_papers[:max_papers]
     formatted = "\n".join(_format_paper(p) for p in batch)
-    n = len(batch)
+    n_s2 = sum(1 for p in batch if not isinstance(p, dict))
+    n_pm = sum(1 for p in batch if isinstance(p, dict))
+    sources = " + ".join(filter(None, [
+        f"Semantic Scholar ×{n_s2}" if n_s2 else "",
+        f"PubMed ×{n_pm}" if n_pm else "",
+    ]))
     result = (
-        f"RÉFÉRENCES DE LA LITTÉRATURE SCIENTIFIQUE ({n} articles — Semantic Scholar) :\n"
+        f"RÉFÉRENCES DE LA LITTÉRATURE SCIENTIFIQUE ({len(batch)} articles — {sources}) :\n"
         "Ces résumés illustrent l'état de l'art général du domaine. "
         "Ne citer aucun titre ni auteur dans la fiche sans en avoir vérifié le contenu exact.\n\n"
         f"{formatted}"
