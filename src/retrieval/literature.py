@@ -2,24 +2,20 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import os
-import time
-import urllib.error
-import urllib.parse
-import urllib.request
+
+from semanticscholar import SemanticScholar
 
 _log = logging.getLogger(__name__)
 
-_API_BASE = "https://api.semanticscholar.org/graph/v1/paper/search"
-_FIELDS = "title,authors,year,abstract"
-_TIMEOUT_S = 10
 _MAX_ABSTRACT_CHARS = 350
-# Without a key: 1 req/s. With a free key (SEMANTIC_SCHOLAR_API_KEY env var): 10 req/s.
-_INTER_QUERY_SLEEP_S = 1.1
+_FIELDS_OF_STUDY = ["Agricultural and Food Sciences", "Biology", "Chemistry", "Engineering"]
+_YEAR_FILTER = "2010-"        # papers from 2010 onwards
+_MIN_CITATIONS = 3            # filter noise, keep cited work
+_FIELDS = ["title", "authors", "year", "abstract", "citationCount"]
 
-# Queries tailored to each CIR groupement — two passes, deduplicated
+# Per-groupement queries — two passes, results deduplicated on paperId
 _QUERIES: dict[str, list[str]] = {
     "Muscles à base de protéines végétales": [
         "high moisture extrusion plant protein fibrous texture anisotropy",
@@ -36,29 +32,27 @@ _QUERIES: dict[str, list[str]] = {
 }
 
 
-def _search(query: str, limit: int) -> list[dict]:
-    params = urllib.parse.urlencode({"query": query, "fields": _FIELDS, "limit": limit})
-    headers = {"User-Agent": "accro-graph-rag/1.0"}
-    api_key = os.getenv("SEMANTIC_SCHOLAR_API_KEY", "")
-    if api_key:
-        headers["x-api-key"] = api_key
-    req = urllib.request.Request(f"{_API_BASE}?{params}", headers=headers)
-    with urllib.request.urlopen(req, timeout=_TIMEOUT_S) as resp:
-        return json.loads(resp.read()).get("data", [])
+def _build_client() -> SemanticScholar:
+    api_key = os.getenv("SEMANTIC_SCHOLAR_API_KEY", "") or None
+    # retry=True (default): retries up to 10× on HTTP 429, 30s apart
+    return SemanticScholar(api_key=api_key, timeout=10)
 
 
-def _format_paper(p: dict) -> str:
-    title = p.get("title") or "Sans titre"
-    year = p.get("year") or "?"
-    raw_authors = p.get("authors") or []
-    names = [a.get("name", "") for a in raw_authors[:3]]
+def _format_paper(p: object) -> str:
+    title = getattr(p, "title", None) or "Sans titre"
+    year = getattr(p, "year", None) or "?"
+    raw_authors = getattr(p, "authors", None) or []
+    names = [getattr(a, "name", "") for a in raw_authors[:3]]
     authors = ", ".join(names) + (" et al." if len(raw_authors) > 3 else "")
-    abstract = (p.get("abstract") or "").strip()
+    abstract = (getattr(p, "abstract", None) or "").strip()
     if len(abstract) > _MAX_ABSTRACT_CHARS:
         abstract = abstract[:_MAX_ABSTRACT_CHARS].rsplit(" ", 1)[0] + "…"
+    citations = getattr(p, "citationCount", None)
     line = f"- {title} ({year})"
     if authors:
         line += f" — {authors}"
+    if citations is not None:
+        line += f" [{citations} citations]"
     if abstract:
         line += f"\n  {abstract}"
     return line
@@ -68,27 +62,37 @@ def fetch_literature(groupement: str, max_papers: int = 6) -> str:
     """Return a formatted literature block to inject into the CIR system prompt.
 
     Returns an empty string if the groupement is unknown or the API is unavailable.
+    Retries automatically on HTTP 429 (handled by the semanticscholar client).
     """
     queries = _QUERIES.get(groupement, [])
     if not queries:
         return ""
 
+    sch = _build_client()
     seen: set[str] = set()
-    papers: list[dict] = []
+    papers: list[object] = []
     per_query = max(2, max_papers // len(queries) + 1)
 
-    for i, query in enumerate(queries):
-        if i > 0:
-            time.sleep(_INTER_QUERY_SLEEP_S)
+    for query in queries:
+        if len(papers) >= max_papers:
+            break
         try:
-            results = _search(query, limit=per_query)
+            results = sch.search_paper(
+                query,
+                fields=_FIELDS,
+                fields_of_study=_FIELDS_OF_STUDY,
+                year=_YEAR_FILTER,
+                min_citation_count=_MIN_CITATIONS,
+                limit=per_query,
+            )
         except Exception as exc:
             _log.warning("Semantic Scholar unavailable (%s) — skipping query: %s", exc, query)
             continue
+
         for p in results:
-            pid = p.get("paperId") or p.get("title", "")
-            if pid and pid not in seen and p.get("title"):
-                seen.add(pid)
+            pid = getattr(p, "paperId", None) or getattr(p, "title", "")
+            if pid and pid not in seen and getattr(p, "title", None):
+                seen.add(str(pid))
                 papers.append(p)
             if len(papers) >= max_papers:
                 break
@@ -96,8 +100,11 @@ def fetch_literature(groupement: str, max_papers: int = 6) -> str:
     if not papers:
         return ""
 
-    n = len(papers[:max_papers])
-    formatted = "\n".join(_format_paper(p) for p in papers[:max_papers])
+    batch = papers[:max_papers]
+    # Sort by citation count descending so the most-cited appear first
+    batch.sort(key=lambda p: getattr(p, "citationCount", 0) or 0, reverse=True)
+    formatted = "\n".join(_format_paper(p) for p in batch)
+    n = len(batch)
     return (
         f"RÉFÉRENCES DE LA LITTÉRATURE SCIENTIFIQUE ({n} articles — Semantic Scholar) :\n"
         "Ces résumés illustrent l'état de l'art général du domaine. "
