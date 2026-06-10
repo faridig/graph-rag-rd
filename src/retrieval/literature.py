@@ -1,10 +1,14 @@
-"""Fetches relevant literature from Semantic Scholar for CIR section-1 state of the art."""
+"""Fetches relevant literature from Semantic Scholar and PubMed for CIR section-1 state of the art."""
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
+import urllib.parse
+import urllib.request
+import xml.etree.ElementTree as ET
 
 from semanticscholar import SemanticScholar
 
@@ -18,7 +22,11 @@ _YEAR_FILTER = "2010-"        # papers from 2010 onwards
 _MIN_CITATIONS = 3            # filter noise, keep cited work
 _FIELDS = ["title", "authors", "year", "abstract", "citationCount"]
 
-# Per-groupement queries — two passes, results deduplicated on paperId
+_PUBMED_BASE = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
+_PUBMED_TOOL = "accro-graph-rag"
+_PUBMED_EMAIL = "faridigouti@gmail.com"  # required by NCBI for rate-limit contact
+
+# Per-groupement queries for Semantic Scholar
 _QUERIES: dict[str, list[str]] = {
     "Muscles à base de protéines végétales": [
         "high moisture extrusion plant protein fibrous texture anisotropy",
@@ -33,6 +41,84 @@ _QUERIES: dict[str, list[str]] = {
         "direct shear vegetable protein high temperature processing",
     ],
 }
+
+
+# Per-groupement queries for PubMed (uses [tiab] = title+abstract field tag)
+_PUBMED_QUERIES: dict[str, list[str]] = {
+    "Muscles à base de protéines végétales": [
+        "high moisture extrusion plant protein texture[tiab]",
+        "plant-based meat analog fibrous structure[tiab]",
+    ],
+    "Produits élaborés à base de muscle végétaux": [
+        "plant-based meat analog texture formulation sensory[tiab]",
+        "vegetable protein product water retention cohesion[tiab]",
+    ],
+    "Nouvelles voies de texturation des protéines végétales": [
+        "shear cell plant protein texturization[tiab]",
+        "direct shear technology vegetable protein fibrous[tiab]",
+    ],
+}
+
+
+def _pubmed_get(endpoint: str, params: dict) -> bytes:
+    params.update({"tool": _PUBMED_TOOL, "email": _PUBMED_EMAIL})
+    url = f"{_PUBMED_BASE}/{endpoint}?{urllib.parse.urlencode(params)}"
+    with urllib.request.urlopen(url, timeout=10) as resp:
+        return resp.read()
+
+
+def _fetch_pubmed(query: str, limit: int) -> list[dict]:
+    """Search PubMed and return a list of dicts with title/authors/year/abstract."""
+    # Step 1 — esearch: get PMIDs
+    raw = _pubmed_get("esearch.fcgi", {
+        "db": "pubmed", "term": query,
+        "retmax": limit, "retmode": "json",
+        "datetype": "pdat", "mindate": "2010",
+    })
+    pmids = json.loads(raw).get("esearchresult", {}).get("idlist", [])
+    if not pmids:
+        return []
+
+    time.sleep(0.4)  # NCBI: 3 req/s without API key
+
+    # Step 2 — efetch: get full records with abstracts
+    raw_xml = _pubmed_get("efetch.fcgi", {
+        "db": "pubmed", "id": ",".join(pmids),
+        "retmode": "xml", "rettype": "abstract",
+    })
+    root = ET.fromstring(raw_xml)
+    papers = []
+    for article in root.findall(".//PubmedArticle"):
+        mc = article.find("MedlineCitation")
+        if mc is None:
+            continue
+        art = mc.find("Article")
+        if art is None:
+            continue
+        title = (art.findtext("ArticleTitle") or "").strip()
+        if not title:
+            continue
+        # Year — try multiple paths
+        year = (
+            mc.findtext(".//PubDate/Year")
+            or mc.findtext(".//PubDate/MedlineDate", "?")[:4]
+        )
+        # Authors
+        authors = [
+            " ".join(filter(None, [a.findtext("ForeName"), a.findtext("LastName")]))
+            for a in (art.findall("AuthorList/Author") or [])
+            if a.findtext("LastName")
+        ]
+        # Abstract — may be structured (multiple AbstractText elements)
+        abstract = " ".join(
+            (t.text or "") for t in art.findall("Abstract/AbstractText") if t.text
+        ).strip()
+        pmid = mc.findtext("PMID") or ""
+        papers.append({
+            "pmid": pmid, "title": title,
+            "authors": authors, "year": year, "abstract": abstract,
+        })
+    return papers
 
 
 def _build_client() -> SemanticScholar:
