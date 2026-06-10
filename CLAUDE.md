@@ -29,13 +29,15 @@ Full spec: `docs/spec/SPEC.md` — historique des fixes et évolution : `docs/HI
 **Livré session 2026-06-10 :**
 - Interface Chainlit complète (liens SharePoint, welcome, CIR)
 - Génération fiches CIR MESRI (3 groupements, streaming, export .docx)
-- MCP littérature : Semantic Scholar + Academic-MCP configurés (`.mcp.json`)
+- Littérature Semantic Scholar + PubMed intégrée dans `src/retrieval/literature.py`
+- CIR : filtre année fiscale (`cir_year`), mode test `CIR_MOCK=1`, fix headings .docx
+- CIR : prompt règles 16-18 (ancrage littérature, cohérence S2↔S3, sources hors-scope)
 
 **Axes optionnels si reprise :**
-- Intégrer MCP → prompt CIR : pré-requête littérature → inject état de l'art réel
 - Contacter Yassine : DST-7 (sans runs) + STRIP-15 (absent SharePoint)
 - Re-extraire `panel_ressemblant_score` depuis Excel KOBE → +3-4 questions testset
 - Corriger 5 hyperliens cassés dans Répertoire SharePoint (colonne K, cosmétique)
+- Compléter effectifs panels sensoriels dans les fiches Excel (FIB-12, ACE-6)
 
 ⚠️ **Ne jamais lancer `--ragas` sans accord explicite** — coût ~$7/run.
 
@@ -53,8 +55,9 @@ Full spec: `docs/spec/SPEC.md` — historique des fixes et évolution : `docs/HI
 | `src/chainlit_app.py` | Interface Chainlit (chat web) — lancer avec `PYTHONPATH="." chainlit run src/chainlit_app.py --port 8001` |
 | `src/generation/rag_pipeline.py` | Orchestration RAG : `run_query()`, `build_pipeline()`, `get_dense_score()` |
 | `src/generation/prompt_fr.py` | Template de prompt système (français) |
-| `src/cir.py` | Génération fiches CIR depuis Neo4j → Claude (3 groupements) |
-| `src/generation/prompt_cir.py` | Prompts CIR : `SYSTEM_PROMPT_CIR_MUSCLES/NOUVELLES_VOIES/PRODUITS`, `CIR_FORMAT` |
+| `src/cir.py` | Génération fiches CIR depuis Neo4j → Claude (3 groupements) — exports : `stream_fiche_cir`, `export_docx`, `get_project_start_year`, `build_cir_clients` |
+| `src/generation/prompt_cir.py` | Prompts CIR : `SYSTEM_PROMPT_CIR_MUSCLES/NOUVELLES_VOIES/PRODUITS`, `CIR_FORMAT` — 18 règles MESRI |
+| `src/retrieval/literature.py` | `fetch_literature(groupement, max_papers, year_max)` — Semantic Scholar + PubMed, cache 1h |
 | `src/retrieval/base.py` | Interface `IRetriever` |
 | `src/retrieval/hybrid_retriever.py` | `HybridCypherRetriever` — retrieval dense+sparse via Neo4j |
 | `src/retrieval/exact_lookup.py` | Fallback : ingrédient CONTAINS + fulltext Lucene AND |
@@ -146,9 +149,11 @@ ANTHROPIC_API_KEY=sk-ant-...
 DEEPSEEK_API_KEY=sk-...
 ```
 
-Variable optionnelle :
+Variables optionnelles :
 ```bash
 RAG_IDS_CACHE_TTL=300   # TTL cache IDs Neo4j (0 = reload chaque requête)
+CIR_MOCK=1              # Mode test CIR — bypass LLM + Neo4j, génère une fiche fictive
+SEMANTIC_SCHOLAR_API_KEY=...  # Optionnel — augmente le quota Semantic Scholar
 ```
 
 ---
@@ -200,7 +205,27 @@ RAG_IDS_CACHE_TTL=300   # TTL cache IDs Neo4j (0 = reload chaque requête)
 - Section 3 OBLIGATOIRE : sous-paragraphe "Essais non concluants"
 - Section 4 OBLIGATOIRE : "Règles opératoires établies" (transférables)
 - ⚠ si donnée absente — ne jamais inventer, ne jamais citer un titre/auteur incertain
-- `_SUBSECTION_RE` dans `export_docx` gère les titres `1a.` `1b.` `3b.` → heading level 3
+- Règle 16 : INTERDIRE "pour la première fois dans les conditions ACCRO" → ancrage littérature obligatoire
+- Règle 17 : axes Section 3 doivent correspondre exactement aux axes Section 2
+- Règle 18 : sources hors-scope (poisson, autre chantier) exclues
+
+**export_docx — détection des titres :**
+Basée sur préfixes markdown : `#### ` → H3, `### ` → H2, `## ` → H1, `# ` → H1.
+Ne PAS utiliser `_SECTION_RE` ou `_SUBSECTION_RE` (supprimés) — l'ancien regex matchait les
+listes numérotées ("1. Prédiction de l'anisotropie…") et les stylistait incorrectement en H2.
+
+**Filtre année fiscale :**
+- `stream_fiche_cir(..., cir_year: int | None)` : filtre les runs par `rep.date STARTS WITH str(cir_year)`
+- `get_project_start_year(driver, groupement)` : retourne l'année du premier run (sans filtre — historique complet pour la littérature)
+- Chainlit : year picker (2025 recommandé / 2026 / 2024) entre le choix du groupement et la génération
+
+**Mode test :**
+- `CIR_MOCK=1` → `stream_fiche_cir` génère une fiche fictive sans appel LLM ni Neo4j
+
+**Cas ACCRO — dossier justificatif (Case 2) :**
+ACCRO fait de la R&D interne → déclare via formulaire 2069-A-SD → dossier justificatif pour audit DGFiP/MESRI.
+Pas de limite de pages imposée (contrairement au CIROCO agrément, Case 1, non applicable à ACCRO).
+Priorité : complétude et précision, pas concision.
 
 **Détection dans Chainlit :**
 - `_is_cir_generation_request(text)` : CIR présent ET pas question informative → picker
@@ -217,7 +242,9 @@ Intégrée directement dans `src/retrieval/literature.py` — pas de MCP nécess
 | Semantic Scholar | `semanticscholar` Python client | `SEMANTIC_SCHOLAR_API_KEY` dans `.env` |
 | PubMed | E-utilities HTTP (stdlib) | aucune |
 
-Cache 1h par groupement. Dégradation gracieuse si une source est indisponible.
+Cache 1h par `(groupement, year_max)`. Dégradation gracieuse si une source est indisponible.
+
+`year_max` : si fourni, exclut les articles publiés à partir de cette année (état de l'art = connaissances disponibles AU DÉMARRAGE des travaux). Obtenu via `get_project_start_year()` avant d'appeler `fetch_literature()`.
 
 ---
 
@@ -316,6 +343,9 @@ f'<a href="{safe_url}" target="_blank" rel="noopener noreferrer">...'
 Prérequis : `unsafe_allow_html = true` dans `.chainlit/config.toml`.
 
 **Fichiers temporaires (.docx CIR) :** enregistrer les chemins dans `cl.user_session.set("tmp_files", [...])` et nettoyer dans `@cl.on_chat_end` via `os.unlink`.
+
+**Téléchargement .docx :** utiliser `cl.File(display="side")`, jamais `display="inline"`.
+Chainlit ne peut pas prévisualiser les .docx en inline — affiche silencieusement rien.
 
 **CSS — sélecteurs DOM Chainlit 2.x :** pas de `data-role="assistant"` ni `.message-content` dans le DOM réel. Inspecter le DOM réel pour cibler les bons sélecteurs.
 
