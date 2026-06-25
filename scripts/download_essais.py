@@ -13,40 +13,42 @@ import argparse
 import base64
 import io
 import logging
+import os
 import re
 import sys
 from pathlib import Path
 
 import openpyxl
+from dotenv import load_dotenv
 
 import msal
 import requests
 
+load_dotenv()
+
 # ── Constantes ───────────────────────────────────────────────────────────────
 
-# Azure CLI client ID — app Microsoft first-party, pré-approuvée dans la plupart des tenants.
-# Si le tenant bloque même ce client, voir commentaire en bas de fichier.
-CLIENT_ID = "e5e5bc3b-aeb0-4fbb-8cd8-76a90a8fcf11"
-TENANT_ID = "21aa992f-60cb-4048-b8b9-64e1fb98e11f"
 SCOPES = [
     "https://graph.microsoft.com/Files.Read.All",
     "https://graph.microsoft.com/Sites.Read.All",
 ]
 
-SITE_HOSTNAME = "nxtfoodfr.sharepoint.com"
-SITE_PATH = "/sites/RD"
-# ID extrait du sourcedoc= de l'URL SharePoint
-REPERTOIRE_ITEM_ID = "3E7753D0-1871-4786-9EF4-040E3B08AF38"
-
 GRAPH = "https://graph.microsoft.com/v1.0"
+
+
+def _require(name: str) -> str:
+    value = os.getenv(name)
+    if not value:
+        raise RuntimeError(f"Variable d'environnement manquante : {name} (voir .env.example)")
+    return value
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
 
 def get_token() -> str:
     app = msal.PublicClientApplication(
-        CLIENT_ID,
-        authority=f"https://login.microsoftonline.com/{TENANT_ID}",
+        _require("AZURE_CLIENT_ID"),
+        authority=f"https://login.microsoftonline.com/{_require('AZURE_TENANT_ID')}",
         token_cache=msal.SerializableTokenCache(),
     )
     accounts = app.get_accounts()
@@ -85,12 +87,12 @@ def graph_get(session: requests.Session, path: str, **kwargs) -> dict:
 
 def get_drive_id(session: requests.Session) -> str:
     """Retourne le driveId du document library par défaut du site RD."""
-    return _get_drive_id_for_site(session, SITE_PATH)
+    return _get_drive_id_for_site(session, _require("SHAREPOINT_SITE_PATH"))
 
 
 def _get_drive_id_for_site(session: requests.Session, site_path: str) -> str:
     """Retourne le driveId du document library par défaut pour un site SharePoint."""
-    site = graph_get(session, f"/sites/{SITE_HOSTNAME}:{site_path}")
+    site = graph_get(session, f"/sites/{_require('SHAREPOINT_HOSTNAME')}:{site_path}")
     site_id = site["id"]
     drives = graph_get(session, f"/sites/{site_id}/drives", params={"$select": "id,name,driveType"})
     for drive in drives["value"]:
@@ -146,7 +148,7 @@ def get_links_from_excel(
     # 1. Télécharger le fichier Excel en mémoire
     print("Téléchargement du fichier Excel...")
     resp = session.get(
-        f"{GRAPH}/drives/{drive_id}/items/{REPERTOIRE_ITEM_ID}/content",
+        f"{GRAPH}/drives/{drive_id}/items/{_require('SHAREPOINT_REPERTOIRE_ITEM_ID')}/content",
         allow_redirects=True,
     )
     resp.raise_for_status()
