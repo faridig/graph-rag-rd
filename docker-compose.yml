@@ -17,5 +17,15 @@ services:
       timeout: 5s
       retries: 10
 
+  accro-rag:
+    build: .
+    expose:
+      - "8001"
+    env_file: .env
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   neo4j_data:

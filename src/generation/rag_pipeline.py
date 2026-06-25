@@ -1,4 +1,4 @@
-"""RAG pipeline: dense gate → exact fallback → hybrid search → DeepSeek generation."""
+"""RAG pipeline: dense gate → exact fallback → hybrid search → Claude generation."""
 
 from __future__ import annotations
 
@@ -7,12 +7,13 @@ import re
 import time
 from collections.abc import Iterator
 
+from anthropic import Anthropic
 from neo4j import Driver
 from openai import OpenAI
 
 from src.config import (
     ABSENT_TOPICS_PATH,
-    DEEPSEEK_API_KEY,
+    ANTHROPIC_API_KEY,
     FALLBACK_MESSAGE,
     LLM_MODEL,
     NEO4J_PASSWORD,
@@ -293,11 +294,11 @@ class RAGPipeline:
         self,
         driver: Driver,
         openai_client: OpenAI,
-        deepseek_client: OpenAI,
+        anthropic_client: Anthropic,
     ) -> None:
         self._driver = driver
         self._openai = openai_client
-        self._llm = deepseek_client
+        self._llm = anthropic_client
         self._retriever = HybridNeo4jRetriever(driver, openai_client)
         self._known_exp_ids, self._known_exp_prefixes, self._empty_exp_ids = (
             _load_experiment_ids(driver)
@@ -335,20 +336,20 @@ class RAGPipeline:
         history: list[dict] | None = None,
     ) -> tuple[str, int, int]:
         history_messages = _format_history_messages(history) if history else []
-        response = self._llm.chat.completions.create(
+        response = self._llm.messages.create(
             model=LLM_MODEL,
             max_tokens=4096,
             temperature=0,
+            system=SYSTEM_PROMPT,
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
                 *history_messages,
                 {"role": "user", "content": f"Contexte :\n{context}\n\nQuestion : {question}"},
             ],
         )
         return (
-            response.choices[0].message.content,
-            response.usage.prompt_tokens,
-            response.usage.completion_tokens,
+            response.content[0].text,
+            response.usage.input_tokens,
+            response.usage.output_tokens,
         )
 
     def _apply_augmentation(
@@ -850,25 +851,22 @@ class RAGPipeline:
         in_tok = out_tok = 0
 
         history_messages = _format_history_messages(history) if history else []
-        for chunk in self._llm.chat.completions.create(
+        with self._llm.messages.stream(
             model=LLM_MODEL,
             max_tokens=4096,
             temperature=0,
+            system=SYSTEM_PROMPT,
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
                 *history_messages,
                 {"role": "user", "content": f"Contexte :\n{context}\n\nQuestion : {question}"},
             ],
-            stream=True,
-            stream_options={"include_usage": True},
-        ):
-            delta = chunk.choices[0].delta.content if chunk.choices else None
-            if delta:
+        ) as stream:
+            for delta in stream.text_stream:
                 text_chunks.append(delta)
                 yield delta
-            if chunk.usage:
-                in_tok = chunk.usage.prompt_tokens
-                out_tok = chunk.usage.completion_tokens
+            final_msg = stream.get_final_message()
+            in_tok = final_msg.usage.input_tokens
+            out_tok = final_msg.usage.output_tokens
 
         full_text = "".join(text_chunks)
 
@@ -1486,5 +1484,5 @@ def build_pipeline() -> RAGPipeline:
 
     driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
     openai_client = OpenAI(api_key=OPENAI_API_KEY)
-    deepseek_client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com/v1")
-    return RAGPipeline(driver, openai_client, deepseek_client)
+    anthropic_client = Anthropic(api_key=ANTHROPIC_API_KEY)
+    return RAGPipeline(driver, openai_client, anthropic_client)

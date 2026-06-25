@@ -17,7 +17,6 @@ from src.cir import (
 )
 from src.config import (
     ANTHROPIC_API_KEY,
-    DEEPSEEK_API_KEY,
     NEO4J_PASSWORD,
     NEO4J_URI,
     NEO4J_USER,
@@ -33,9 +32,8 @@ _state: dict[str, Any] = {}
 async def lifespan(app: FastAPI):
     driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
     openai_client = OpenAI(api_key=OPENAI_API_KEY)
-    deepseek_client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com/v1")
     anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    _state["pipeline"] = RAGPipeline(driver, openai_client, deepseek_client)
+    _state["pipeline"] = RAGPipeline(driver, openai_client, anthropic_client)
     _state["driver"] = driver
     _state["anthropic"] = anthropic_client
     yield

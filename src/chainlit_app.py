@@ -29,8 +29,25 @@ from src.generation.rag_pipeline import (
 )
 from src.models import Source
 from src.retrieval.literature import fetch_literature
+from src.config import SSO_ENABLED
+from src.usage_tracker import check_budget, record_usage
 
 _log = logging.getLogger(__name__)
+
+# ── SSO Authentik (header-trust) ──────────────────────────────────────────────
+# SSO_ENABLED=false en sandbox — l'infra nxtdeploy le passe à true en prod.
+if SSO_ENABLED:
+    @cl.header_auth_callback
+    def header_auth_callback(headers: dict) -> cl.User | None:
+        email = (headers.get("x-authentik-email") or "").lower().strip()
+        if not email:
+            return None
+        name = (headers.get("x-authentik-name") or email.split("@")[0]).strip()
+        return cl.User(
+            identifier=email,
+            display_name=name,
+            metadata={"provider": "authentik"},
+        )
 _RUN_ID_RE = re.compile(r"\[source:\s*([^\]]+)\]")
 _CIR_RE = re.compile(r"\bcir\b", re.IGNORECASE)
 # Questions informatives → RAG, pas générateur
@@ -175,6 +192,11 @@ async def on_cir_year(action: cl.Action) -> None:
 
 
 async def _run_cir_generation(groupement: str, cir_year: int | None = None) -> None:
+    allowed, reason = check_budget()
+    if not allowed:
+        await cl.Message(content=f"**Limite atteinte.** {reason}").send()
+        return
+
     loop = asyncio.get_event_loop()
     queue: asyncio.Queue = asyncio.Queue()
 
@@ -237,6 +259,11 @@ async def _run_cir_generation(groupement: str, cir_year: int | None = None) -> N
 
     await msg.update()
 
+    if final_response.input_tokens or final_response.output_tokens:
+        await asyncio.to_thread(
+            record_usage, final_response.input_tokens, final_response.output_tokens
+        )
+
     import tempfile as _tmp
     with _tmp.NamedTemporaryFile(suffix=".docx", delete=False) as f:
         tmp_path = f.name
@@ -291,6 +318,8 @@ async def on_chat_start() -> None:
             "Extrusion et Applications. "
             "Posez-moi des questions sur vos essais : effets d'ingrédients, valeurs mesurées, "
             "comparaisons entre runs, références croisées.\n\n"
+            "⚠️ **La couverture des données est celle du Répertoire 2025-2026** — "
+            "je ne dispose que des expériences et runs qui y sont enregistrés.\n\n"
             "**Quelques exemples :**\n"
             "- *Quel effet a l'huile de tournesol sur l'anisotropie dans les essais M03 ?*\n"
             "- *Quelles expériences ont utilisé du psyllium Fibrinel PSL ?*\n"
@@ -327,6 +356,11 @@ def _is_cir_generation_request(text: str) -> bool:
 async def on_message(message: cl.Message) -> None:
     if _is_cir_generation_request(message.content):
         await _show_cir_groupement_picker()
+        return
+
+    allowed, reason = check_budget()
+    if not allowed:
+        await cl.Message(content=f"**Limite atteinte.** {reason}").send()
         return
 
     history = _history_from_session()
@@ -387,6 +421,11 @@ async def on_message(message: cl.Message) -> None:
         await msg.stream_token(f"\n\n<hr/><strong>Sources</strong>\n{sources_md}")
 
     await msg.update()
+
+    if final_response.input_tokens or final_response.output_tokens:
+        await asyncio.to_thread(
+            record_usage, final_response.input_tokens, final_response.output_tokens
+        )
 
     # Save to session history (strip sources footer for context)
     history_entry_assistant = answer  # answer without sources markdown
