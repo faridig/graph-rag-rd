@@ -10,7 +10,7 @@ Full spec: `docs/spec/SPEC.md` — historique des fixes et évolution : `docs/HI
 
 ---
 
-## État (2026-06-10) — LIVRABLE ✅ + CIR ✅
+## État (2026-06-24) — LIVRABLE ✅ + CIR ✅ + Budget tracking ✅
 
 **Corpus : 3072 chunks / 2371 runs / 170 experiments — 100% embedé. SCORE_THRESHOLD = 0.6689.**
 
@@ -32,6 +32,15 @@ Full spec: `docs/spec/SPEC.md` — historique des fixes et évolution : `docs/HI
 - Littérature Semantic Scholar + PubMed intégrée dans `src/retrieval/literature.py`
 - CIR : filtre année fiscale (`cir_year`), mode test `CIR_MOCK=1`, fix headings .docx
 - CIR : prompt règles 16-18 (ancrage littérature, cohérence S2↔S3, sources hors-scope)
+
+**Livré session 2026-06-24 :**
+- LLM RAG migré DeepSeek → Claude (`claude-sonnet-4-6`) — client Anthropic natif
+- Suivi budgétaire : `src/usage_tracker.py` — daily/monthly en €, persisté dans `data/usage.json`
+- Chainlit : blocage automatique si budget journalier ou mensuel dépassé (`check_budget()`)
+- Déploiement sandbox `farid@docker-sandbox:~/accro-rag` (SSH alias `sandbox`) — script `scripts/setup_neo4j_sandbox.sh`
+
+**Livré session 2026-06-25 :**
+- `scripts/download_essais.py` : credentials Azure/SharePoint sortis du code → `.env` (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `SHAREPOINT_HOSTNAME`, `SHAREPOINT_SITE_PATH`, `SHAREPOINT_REPERTOIRE_ITEM_ID`) — helper `_require()` pour fail-fast si variable absente
 
 **Axes optionnels si reprise :**
 - Contacter Yassine : DST-7 (sans runs) + STRIP-15 (absent SharePoint)
@@ -68,7 +77,50 @@ Full spec: `docs/spec/SPEC.md` — historique des fixes et évolution : `docs/HI
 | `src/ingest/calibrate_threshold.py` | Calibration du SCORE_THRESHOLD |
 | `scripts/batch_extract.py` | Extraction batch LLM : xlsx/docx/csv → 4 artefacts KG |
 | `scripts/build_kg.py` | Triples CSV + documentation MD + validation MD depuis knowledge JSON |
+| `src/usage_tracker.py` | Suivi budgétaire API Claude — `record_usage`, `check_budget`, `usage_summary` — persisté dans `data/usage.json` |
 | `scripts/download_essais.py` | Téléchargement fichiers liés depuis SharePoint (MSAL device flow) |
+| `scripts/setup_neo4j_sandbox.sh` | Setup Neo4j sur sandbox : démarrage, chargement dump, fix NEO4J_URI |
+
+---
+
+## Déploiement sandbox
+
+**Cible :** `farid@docker-sandbox:~/accro-rag` — alias SSH `sandbox` (ProxyJump via `54.36.121.98:54722`)
+
+**Sync du code :**
+```bash
+rsync -avz --exclude='.git/' --exclude='.venv/' --exclude='__pycache__/' \
+  --exclude='.env' --exclude='.playwright-mcp/' --exclude='.claude/' \
+  --exclude='data/repertoire_rd_2025-2026/lien_essai/' \
+  /home/farid/Documents/projets_accro/r\&d_new/ sandbox:~/accro-rag/
+# Envoyer le .env séparément (clés API — à faire manuellement)
+scp .env sandbox:~/accro-rag/.env
+```
+
+**Premier déploiement :**
+```bash
+ssh sandbox
+cd ~/accro-rag
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+./scripts/setup_neo4j_sandbox.sh   # démarre Neo4j, charge le dump, fixe NEO4J_URI
+```
+
+**⚠️ Neo4j sur sandbox — problème iptables Docker (Ubuntu) :**
+`localhost:7688` est inaccessible depuis l'hôte malgré le port mappé.
+Utiliser l'IP interne du container : `bolt://172.30.0.2:7687`
+→ Le script `setup_neo4j_sandbox.sh` met à jour `NEO4J_URI` automatiquement.
+Si le container est recréé, récupérer la nouvelle IP : `docker inspect accro-rag-neo4j-1 --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'`
+
+**Lancer l'appli :**
+```bash
+PYTHONPATH=. .venv/bin/chainlit run src/chainlit_app.py --port 8001
+```
+
+**Accès depuis le PC local** (tunnel SSH) :
+```bash
+ssh -L 8003:localhost:8001 sandbox   # ports 8001/8002 souvent déjà pris localement
+# → http://localhost:8003
+```
 
 ---
 
@@ -80,7 +132,7 @@ Full spec: `docs/spec/SPEC.md` — historique des fixes et évolution : `docs/HI
 | Graph DB + Vector DB | Neo4j 2025.x | Cypher 25 — vector store unique |
 | Graph RAG | neo4j-graphrag | HybridCypherRetriever |
 | Embeddings | OpenAI text-embedding-3-large | **dimensions=1536** (always) |
-| LLM (RAG) | deepseek-chat | via DeepSeek API — `LLM_MODEL` dans config.py |
+| LLM (RAG) | claude-sonnet-4-6 | via Anthropic API — `LLM_MODEL` dans config.py |
 | LLM (CIR) | claude-sonnet-4-6 | via Anthropic API — `CIR_LLM_MODEL` dans config.py |
 | LLM (extraction) | claude-sonnet-4-6 | batch_extract.py — thinking activé, streaming |
 | Infra | Docker Compose | Neo4j seul |
@@ -146,14 +198,25 @@ NEO4J_USER=neo4j
 NEO4J_PASSWORD=<password>
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
-DEEPSEEK_API_KEY=sk-...
 ```
 
 Variables optionnelles :
 ```bash
-RAG_IDS_CACHE_TTL=300   # TTL cache IDs Neo4j (0 = reload chaque requête)
-CIR_MOCK=1              # Mode test CIR — bypass LLM + Neo4j, génère une fiche fictive
-SEMANTIC_SCHOLAR_API_KEY=...  # Optionnel — augmente le quota Semantic Scholar
+RAG_IDS_CACHE_TTL=300         # TTL cache IDs Neo4j (0 = reload chaque requête)
+CIR_MOCK=1                    # Mode test CIR — bypass LLM + Neo4j, génère une fiche fictive
+SEMANTIC_SCHOLAR_API_KEY=...  # Augmente le quota Semantic Scholar
+USD_TO_EUR=0.92               # Taux de conversion pour le suivi budgétaire (défaut 0.92)
+DAILY_BUDGET_EUR=10.0         # Budget journalier Claude en € (0 = désactivé)
+MONTHLY_BUDGET_EUR=100.0      # Budget mensuel Claude en € (0 = désactivé)
+```
+
+Variables `scripts/download_essais.py` (téléchargement SharePoint — obligatoires pour ce script) :
+```bash
+AZURE_CLIENT_ID=...               # ID app Azure AD (device code flow)
+AZURE_TENANT_ID=...               # ID tenant Microsoft 365 nxtfood.fr
+SHAREPOINT_HOSTNAME=nxtfoodfr.sharepoint.com
+SHAREPOINT_SITE_PATH=/sites/RD
+SHAREPOINT_REPERTOIRE_ITEM_ID=... # sourcedoc= extrait de l'URL SharePoint du répertoire
 ```
 
 ---
@@ -199,7 +262,7 @@ SEMANTIC_SCHOLAR_API_KEY=...  # Optionnel — augmente le quota Semantic Scholar
 **3 groupements :** Muscles HME · Produits élaborés · Nouvelles voies DST
 
 **Règles critiques :**
-- Utiliser `CIR_LLM_MODEL` (Anthropic `claude-sonnet-4-6`), jamais `LLM_MODEL` (DeepSeek)
+- Utiliser `CIR_LLM_MODEL` (Anthropic `claude-sonnet-4-6`) pour les fiches CIR — `LLM_MODEL` aussi Claude depuis 2026-06-24
 - Contexte tronqué à `_MAX_CONTEXT_CHARS = 120_000` — tri par richesse (summary > synthesis > objective)
 - Section 1 OBLIGATOIRE : état de l'art + incertitude + distinction R&D/ingénierie
 - Section 3 OBLIGATOIRE : sous-paragraphe "Essais non concluants"
@@ -348,6 +411,22 @@ Prérequis : `unsafe_allow_html = true` dans `.chainlit/config.toml`.
 Chainlit ne peut pas prévisualiser les .docx en inline — affiche silencieusement rien.
 
 **CSS — sélecteurs DOM Chainlit 2.x :** pas de `data-role="assistant"` ni `.message-content` dans le DOM réel. Inspecter le DOM réel pour cibler les bons sélecteurs.
+
+---
+
+## Chargement sélectif par tâche
+
+> Pour chaque type de tâche, lire ces fichiers AVANT de coder. Ne pas charger tout le projet.
+
+| Tâche | Fichiers à lire |
+|-------|----------------|
+| **RAG / retrieval** | `src/retrieval/hybrid_retriever.py`, `src/generation/rag_pipeline.py`, `src/config.py` |
+| **CIR génération** | `src/cir.py`, `src/generation/prompt_cir.py`, `docs/spec/CIR_FEATURE.md` |
+| **Interface Chainlit** | `src/chainlit_app.py` (section Chainlit — Pièges connus ci-dessus) |
+| **Ingest / import** | `src/ingest/import_neo4j.py`, `src/ingest/embed_chunks.py`, `src/config.py` |
+| **Littérature** | `src/retrieval/literature.py` |
+| **Eval / metrics** | `scripts/eval_rag.py`, `data/testset.json` |
+| **Tests** | Fichier de test concerné + `src/` correspondant |
 
 ---
 
