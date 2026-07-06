@@ -409,6 +409,13 @@ async def on_message(message: cl.Message) -> None:
 
     answer = _humanize_citations(final_response.answer)
 
+    # When the pipeline returns a response without streaming any tokens
+    # (e.g. fallback found_in_corpus=False, triggered before generation),
+    # the bubble is still empty — write the answer text explicitly so the
+    # user sees the message instead of a blank bubble.
+    if not accumulated and answer:
+        await msg.stream_token(answer)
+
     if final_response.found_in_corpus and final_response.sources:
         cited_ids = extract_cited_ids(final_response.answer)
         display_sources = (

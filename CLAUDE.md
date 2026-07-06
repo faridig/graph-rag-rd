@@ -412,6 +412,13 @@ Chainlit ne peut pas prévisualiser les .docx en inline — affiche silencieusem
 
 **CSS — sélecteurs DOM Chainlit 2.x :** pas de `data-role="assistant"` ni `.message-content` dans le DOM réel. Inspecter le DOM réel pour cibler les bons sélecteurs.
 
+**Bulle vide sur fallback (réponse sans tokens streamés) :** un fallback (`found_in_corpus=False`, p.ex. déclenché par `absent_topics` avant génération) yield un `QueryResponse` **sans streamer aucun token**. Le handler `on_message` calcule `answer` mais ne l'écrit pas dans la bulle → **bulle vide**, ressenti comme « rien ne se passe » / appli figée. Correctif : après la boucle de streaming, si rien n'a été accumulé, écrire le texte explicitement :
+```python
+if not accumulated and answer:
+    await msg.stream_token(answer)
+```
+Piège de diagnostic : le symptôme imite un blocage websocket/navigateur, mais les logs serveur ne montrent **aucun appel embeddings/LLM** (le fallback court-circuite avant tout appel réseau) et le process reste à 0 % CPU. Reproduire côté serveur (navigateur neuf / Playwright) avant de suspecter le cache ou une extension.
+
 ---
 
 ## Chargement sélectif par tâche
