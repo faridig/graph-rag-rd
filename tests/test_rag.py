@@ -45,13 +45,13 @@ def _make_pipeline(dense_score: float = 0.0, llm_answer: str = "") -> RAGPipelin
     mock_record.__getitem__ = MagicMock(return_value=dense_score)
     mock_session.run.return_value.single.return_value = mock_record
 
-    # DeepSeek LLM (OpenAI-compatible)
-    completion = MagicMock()
-    completion.choices = [MagicMock()]
-    completion.choices[0].message.content = llm_answer
-    completion.usage.prompt_tokens = 0
-    completion.usage.completion_tokens = 0
-    mock_llm.chat.completions.create.return_value = completion
+    # Anthropic LLM (messages API) — migration DeepSeek → Claude (2026-06-24).
+    # _generate lit response.content[0].text + response.usage.{input,output}_tokens.
+    message = MagicMock()
+    message.content = [MagicMock(text=llm_answer)]
+    message.usage.input_tokens = 0
+    message.usage.output_tokens = 0
+    mock_llm.messages.create.return_value = message
 
     with patch("src.retrieval.hybrid_retriever.HybridCypherRetriever"):
         pipeline = RAGPipeline(mock_driver, mock_openai, mock_llm)
@@ -104,7 +104,7 @@ def test_no_llm_call_on_fallback():
     pipeline = _make_pipeline(dense_score=0.0)
     with patch("src.generation.rag_pipeline.exact_lookup", return_value=[]):
         run_query(pipeline, "Ingrédient absent")
-    pipeline._llm.chat.completions.create.assert_not_called()
+    pipeline._llm.messages.create.assert_not_called()
 
 
 # ── found-in-corpus path ──────────────────────────────────────────────────────
@@ -210,7 +210,7 @@ def test_citation_regen_called_when_no_markers():
     )
     pipeline._retriever.search = MagicMock(return_value=[_FAKE_CHUNK])
     run_query(pipeline, "Test ?")
-    assert pipeline._llm.chat.completions.create.call_count == 2
+    assert pipeline._llm.messages.create.call_count == 2
 
 
 # ── get_dense_score public function ──────────────────────────────────────────
