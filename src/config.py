@@ -45,3 +45,12 @@ SCORE_THRESHOLD: float = 0.6689
 
 # SSO Authentik — header-trust (activé par l'infra en prod via nxtdeploy)
 SSO_ENABLED: bool = os.getenv("SSO_ENABLED", "false").lower() == "true"
+
+# Monitoring de la pertinence RAG en production — log JSONL local (voir src/query_log.py).
+# Chaque requête écrit une ligne : signaux de retrieval, fallback, citations, tokens.
+# Mettre QUERY_LOG_ENABLED=false pour désactiver (aucune écriture disque).
+QUERY_LOG_ENABLED: bool = os.getenv("QUERY_LOG_ENABLED", "true").lower() == "true"
+QUERY_LOG_PATH: str = os.getenv(
+    "QUERY_LOG_PATH",
+    os.path.join(os.path.dirname(__file__), "..", "data", "query_log.jsonl"),
+)

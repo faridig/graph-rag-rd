@@ -338,7 +338,7 @@ class RAGPipeline:
         history_messages = _format_history_messages(history) if history else []
         response = self._llm.messages.create(
             model=LLM_MODEL,
-            max_tokens=4096,
+            max_tokens=128000,
             temperature=0,
             system=SYSTEM_PROMPT,
             messages=[
@@ -436,6 +436,18 @@ class RAGPipeline:
 
         return _CITATION_RE.sub(_keep_or_drop, answer).strip()
 
+    def _fallback(
+        self, reason: str, dense_score: float | None = None
+    ) -> QueryResponse:
+        """FALLBACK_MESSAGE annoté de la gate déclenchée (monitoring — query_log)."""
+        return QueryResponse(
+            answer=FALLBACK_MESSAGE,
+            sources=[],
+            found_in_corpus=False,
+            fallback_reason=reason,
+            dense_score=dense_score,
+        )
+
     def run(
         self,
         question: str,
@@ -445,7 +457,7 @@ class RAGPipeline:
     ) -> QueryResponse:
         self._maybe_reload_ids()
         if any(t in question.lower() for t in self._absent_topics):
-            return QueryResponse(answer=FALLBACK_MESSAGE, sources=[], found_in_corpus=False)
+            return self._fallback("absent_topic")
 
         query_vector = embed_text(self._openai, question)
         dense_score = self._dense_score(query_vector)
@@ -456,11 +468,7 @@ class RAGPipeline:
         if dense_score < SCORE_THRESHOLD:
             exact_rows = exact_lookup(self._driver, question)
             if not exact_rows:
-                return QueryResponse(
-                    answer=FALLBACK_MESSAGE,
-                    sources=[],
-                    found_in_corpus=False,
-                )
+                return self._fallback("dense_gate_no_exact", dense_score)
             # Exact match found: use as context
             context = _format_exact_context(exact_rows)
             valid_ids = {r["run_id"] for r in exact_rows}
@@ -489,15 +497,15 @@ class RAGPipeline:
                             out_tok += out2
                         answer = self._verify_citations(answer, inv_valid_ids)
                         if _is_no_data_response(answer):
-                            return QueryResponse(
-                                answer=FALLBACK_MESSAGE, sources=[], found_in_corpus=False
-                            )
+                            return self._fallback("llm_declined", dense_score)
                         return QueryResponse(
                             answer=answer,
                             sources=inv_sources,
                             found_in_corpus=True,
                             input_tokens=in_tok,
                             output_tokens=out_tok,
+                            dense_score=dense_score,
+                            n_chunks=len(inv_sources),
                         )
 
             if _mentions_absent_experiment(
@@ -506,18 +514,14 @@ class RAGPipeline:
                 self._known_exp_prefixes,
                 self._empty_exp_ids,
             ):
-                return QueryResponse(answer=FALLBACK_MESSAGE, sources=[], found_in_corpus=False)
+                return self._fallback("absent_experiment", dense_score)
 
             # ── Hybrid search ─────────────────────────────────────────────────
             filters = {"chantier": chantier} if chantier else None
             chunks = self._retriever.search(question, top_k=top_k, filters=filters)
             chunks = self._apply_augmentation(chunks, question, top_k)
             if not chunks or not _topic_in_chunks(question, chunks):
-                return QueryResponse(
-                    answer=FALLBACK_MESSAGE,
-                    sources=[],
-                    found_in_corpus=False,
-                )
+                return self._fallback("no_chunks_or_topic_mismatch", dense_score)
             # Measure-term augmentation: prepend section-4 chunk (MAX 1) when
             # AI/SME/TPA/anisotropie in question and no section-4 in hybrid results.
             _ql = question.lower()
@@ -647,7 +651,7 @@ class RAGPipeline:
         answer = self._verify_citations(answer, valid_ids)
 
         if _is_no_data_response(answer):
-            return QueryResponse(answer=FALLBACK_MESSAGE, sources=[], found_in_corpus=False)
+            return self._fallback("llm_declined", dense_score)
 
         return QueryResponse(
             answer=answer,
@@ -655,6 +659,8 @@ class RAGPipeline:
             found_in_corpus=True,
             input_tokens=in_tok,
             output_tokens=out_tok,
+            dense_score=dense_score,
+            n_chunks=len(sources),
         )
 
     def run_stream(
@@ -671,7 +677,7 @@ class RAGPipeline:
         """
         self._maybe_reload_ids()
         if any(t in question.lower() for t in self._absent_topics):
-            yield QueryResponse(answer=FALLBACK_MESSAGE, sources=[], found_in_corpus=False)
+            yield self._fallback("absent_topic")
             return
 
         query_vector = embed_text(self._openai, question)
@@ -680,7 +686,7 @@ class RAGPipeline:
         if dense_score < SCORE_THRESHOLD:
             exact_rows = exact_lookup(self._driver, question)
             if not exact_rows:
-                yield QueryResponse(answer=FALLBACK_MESSAGE, sources=[], found_in_corpus=False)
+                yield self._fallback("dense_gate_no_exact", dense_score)
                 return
             context = _format_exact_context(exact_rows)
             valid_ids = {r["run_id"] for r in exact_rows}
@@ -707,9 +713,7 @@ class RAGPipeline:
                             out_tok += out2
                         answer = self._verify_citations(answer, inv_valid_ids)
                         if _is_no_data_response(answer):
-                            yield QueryResponse(
-                                answer=FALLBACK_MESSAGE, sources=[], found_in_corpus=False
-                            )
+                            yield self._fallback("llm_declined", dense_score)
                             return
                         yield QueryResponse(
                             answer=answer,
@@ -717,6 +721,8 @@ class RAGPipeline:
                             found_in_corpus=True,
                             input_tokens=in_tok,
                             output_tokens=out_tok,
+                            dense_score=dense_score,
+                            n_chunks=len(inv_sources),
                         )
                         return
 
@@ -726,14 +732,14 @@ class RAGPipeline:
                 self._known_exp_prefixes,
                 self._empty_exp_ids,
             ):
-                yield QueryResponse(answer=FALLBACK_MESSAGE, sources=[], found_in_corpus=False)
+                yield self._fallback("absent_experiment", dense_score)
                 return
 
             filters = {"chantier": chantier} if chantier else None
             chunks = self._retriever.search(question, top_k=top_k, filters=filters)
             chunks = self._apply_augmentation(chunks, question, top_k)
             if not chunks or not _topic_in_chunks(question, chunks):
-                yield QueryResponse(answer=FALLBACK_MESSAGE, sources=[], found_in_corpus=False)
+                yield self._fallback("no_chunks_or_topic_mismatch", dense_score)
                 return
             # Measure-term augmentation (same logic as run())
             _ql = question.lower()
@@ -853,7 +859,7 @@ class RAGPipeline:
         history_messages = _format_history_messages(history) if history else []
         with self._llm.messages.stream(
             model=LLM_MODEL,
-            max_tokens=4096,
+            max_tokens=128000,
             temperature=0,
             system=SYSTEM_PROMPT,
             messages=[
@@ -879,7 +885,7 @@ class RAGPipeline:
         answer = self._verify_citations(full_text, valid_ids)
 
         if _is_no_data_response(answer):
-            yield QueryResponse(answer=FALLBACK_MESSAGE, sources=[], found_in_corpus=False)
+            yield self._fallback("llm_declined", dense_score)
             return
 
         yield QueryResponse(
@@ -888,6 +894,8 @@ class RAGPipeline:
             found_in_corpus=True,
             input_tokens=in_tok,
             output_tokens=out_tok,
+            dense_score=dense_score,
+            n_chunks=len(sources),
         )
 
 

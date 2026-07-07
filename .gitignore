@@ -12,3 +12,6 @@ data/
 venv/
 .ragas_cache/
 .eval_cache/
+.playwright-mcp/
+neo4j_dump/
+*.docx

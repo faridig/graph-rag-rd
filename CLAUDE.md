@@ -42,6 +42,19 @@ Full spec: `docs/spec/SPEC.md` — historique des fixes et évolution : `docs/HI
 **Livré session 2026-06-25 :**
 - `scripts/download_essais.py` : credentials Azure/SharePoint sortis du code → `.env` (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `SHAREPOINT_HOSTNAME`, `SHAREPOINT_SITE_PATH`, `SHAREPOINT_REPERTOIRE_ITEM_ID`) — helper `_require()` pour fail-fast si variable absente
 
+**Livré session 2026-07-07 (UI Chainlit) :**
+- Charte ACCRO réparée : `public/theme.json` (nouveau — palette HSL shadcn light+dark) + `public/stylesheet.css` réécrit sur les **vrais** sélecteurs 2.11 (l'ancien CSS ciblait `.assistant-message`/`[data-role]` inexistants → rien ne s'appliquait). Header sombre + titre jaune, bulles bordure encre + ombres.
+- Indicateur « réflexion » RAG : `cl.Step` transitoire dans `on_message` (spinner pendant retrieval, `.remove()` à l'arrivée de la réponse — sinon persistant avec `cot="full"`).
+- Cache-busting CSS : middleware `no-cache` scopé au `.css` (`from chainlit.server import app`) + `?v=1` sur `custom_css` (config.toml) pour éjecter les caches figés.
+- Détails documentés dans « Chainlit — Pièges connus » (sélecteurs DOM 2.11, cache /public, pattern step).
+
+**Livré session 2026-07-07 (Monitoring pertinence RAG) :**
+- `src/query_log.py` (nouveau) : log JSONL local `data/query_log.jsonl`, 1 ligne/requête, env-gated `QUERY_LOG_ENABLED`. Signaux : `dense_score`, **raison du fallback** (quelle gate), couverture citations, latence, tokens + retour utilisateur 👍/👎.
+- `QueryResponse` enrichi de champs diagnostic optionnels (`dense_score`, `fallback_reason`, `n_chunks`, `query_id`) — rétro-compatible. Helper `_fallback(reason)` dans le pipeline remplace les ~8 `QueryResponse(FALLBACK_MESSAGE…)` pour capturer la gate déclenchée.
+- Chainlit : `on_message` journalise chaque requête + boutons `cl.Action` 👍/👎 (callback `on_rag_feedback` → `record_feedback`, toast de confirmation).
+- Analyse : `python -m src.query_log --days 7`. Choix outil : socle maison léger (pas Langfuse cloud → règle zéro-fuite ; pas de self-host lourd). Détails dans « Monitoring pertinence RAG (production) ».
+- Follow-up non fait (coûte $ / accord requis) : LLM-as-judge hors-ligne sur échantillon du log via la logique d'`eval_rag.py`.
+
 **Axes optionnels si reprise :**
 - Contacter Yassine : DST-7 (sans runs) + STRIP-15 (absent SharePoint)
 - Re-extraire `panel_ressemblant_score` depuis Excel KOBE → +3-4 questions testset
@@ -61,7 +74,9 @@ Full spec: `docs/spec/SPEC.md` — historique des fixes et évolution : `docs/HI
 | `src/api.py` | FastAPI : `POST /query`, `GET /health`, `GET /corpus` — point d'entrée HTTP |
 | `src/query.py` | CLI : `python -m src.query "<question>"` — point d'entrée terminal |
 | `src/app.py` | Application Gradio (interface web locale) |
-| `src/chainlit_app.py` | Interface Chainlit (chat web) — lancer avec `PYTHONPATH="." chainlit run src/chainlit_app.py --port 8001` |
+| `src/chainlit_app.py` | Interface Chainlit (chat web) — lancer avec `PYTHONPATH="." chainlit run src/chainlit_app.py --port 8001`. Contient le middleware `no-cache` CSS + l'indicateur « réflexion » |
+| `public/theme.json` | Thème Chainlit — palette ACCRO en variables HSL shadcn (blocs `light`+`dark`), injecté en `window.theme` |
+| `public/stylesheet.css` | Charte ACCRO (header sombre + titre jaune, bulles bordure encre + ombres) — sélecteurs DOM 2.11 réels |
 | `src/generation/rag_pipeline.py` | Orchestration RAG : `run_query()`, `build_pipeline()`, `get_dense_score()` |
 | `src/generation/prompt_fr.py` | Template de prompt système (français) |
 | `src/cir.py` | Génération fiches CIR depuis Neo4j → Claude (3 groupements) — exports : `stream_fiche_cir`, `export_docx`, `get_project_start_year`, `build_cir_clients` |
@@ -78,6 +93,7 @@ Full spec: `docs/spec/SPEC.md` — historique des fixes et évolution : `docs/HI
 | `scripts/batch_extract.py` | Extraction batch LLM : xlsx/docx/csv → 4 artefacts KG |
 | `scripts/build_kg.py` | Triples CSV + documentation MD + validation MD depuis knowledge JSON |
 | `src/usage_tracker.py` | Suivi budgétaire API Claude — `record_usage`, `check_budget`, `usage_summary` — persisté dans `data/usage.json` |
+| `src/query_log.py` | Monitoring pertinence RAG — `log_query`, `record_feedback`, `compute_metrics`, `format_summary` — JSONL local `data/query_log.jsonl`. CLI : `python -m src.query_log --days 7` |
 | `scripts/download_essais.py` | Téléchargement fichiers liés depuis SharePoint (MSAL device flow) |
 | `scripts/setup_neo4j_sandbox.sh` | Setup Neo4j sur sandbox : démarrage, chargement dump, fix NEO4J_URI |
 
@@ -167,6 +183,10 @@ PYTHONPATH="." chainlit run src/chainlit_app.py --port 8001
 # API
 uvicorn src.api:app --reload --port 8000
 
+# Monitoring pertinence RAG (logs de prod, gratuit, local)
+python -m src.query_log --days 7           # résumé (fallback, dense_score, feedback…)
+python -m src.query_log --days 0 --json    # tout l'historique, JSON brut
+
 # Eval custom (sans Ragas, ~20 min, gratuit)
 PYTHONPATH="." .venv/bin/python scripts/eval_rag.py \
   --testset data/testset.json \
@@ -208,6 +228,8 @@ SEMANTIC_SCHOLAR_API_KEY=...  # Augmente le quota Semantic Scholar
 USD_TO_EUR=0.92               # Taux de conversion pour le suivi budgétaire (défaut 0.92)
 DAILY_BUDGET_EUR=10.0         # Budget journalier Claude en € (0 = désactivé)
 MONTHLY_BUDGET_EUR=100.0      # Budget mensuel Claude en € (0 = désactivé)
+QUERY_LOG_ENABLED=true        # Monitoring pertinence RAG (JSONL local) — false pour désactiver
+QUERY_LOG_PATH=data/query_log.jsonl  # Chemin du log de requêtes (défaut)
 ```
 
 Variables `scripts/download_essais.py` (téléchargement SharePoint — obligatoires pour ce script) :
@@ -371,6 +393,26 @@ build_pipeline() -> RAGPipeline  # factory via variables d'env
 
 ---
 
+## Monitoring pertinence RAG (production)
+
+**But :** juger la pertinence du RAG en prod sans vérité-terrain + collecter des retours. 100 % local (`data/query_log.jsonl`), aucun envoi externe — respecte la règle « zéro fuite ».
+
+**Ce qui est journalisé** (1 ligne JSONL `{"type":"query"}` par requête, via `log_query` dans `on_message`) :
+`dense_score` (confiance retrieval) · `fallback_reason` (gate déclenchée) · `n_chunks`/`n_sources`/`n_cited` (ancrage) · `latency_ms` · tokens · `chantier`/`user`. Le retour 👍/👎 est une 2e ligne `{"type":"feedback"}` partageant le `query_id`.
+
+**Raisons de fallback** (`FALLBACK_REASONS`, alignées sur les gates du pipeline) : `absent_topic`, `dense_gate_no_exact`, `absent_experiment`, `no_chunks_or_topic_mismatch`, `llm_declined`. → savoir *pourquoi* le corpus ne répond pas (question hors-scope vs lacune du corpus vs refus LLM).
+
+**Flux de données :** le pipeline (`run`/`run_stream`) reste **pur** — il ne fait pas d'I/O ; il *renseigne* les champs diagnostic sur `QueryResponse`. Le logging a lieu au point d'entrée prod (`on_message` de Chainlit). L'API/CLI n'écrit pas de log (évite de polluer les runs d'éval).
+
+**Analyse :** `python -m src.query_log --days 7` → taux de fallback + répartition par raison, `dense_score` moy/méd, couverture citations, latence médiane, tokens, satisfaction 👍/👎. `--json` pour la sortie brute, `--days 0` pour tout l'historique.
+
+**Choix d'outil (recherche context7) :** Langfuse = standard observabilité LLM mais cloud = fuite de données (interdit) et self-host = ~5 conteneurs (trop lourd). Chainlit feedback natif = exige un data layer/DB. → socle maison léger calqué sur `usage_tracker.py`, avec boutons `cl.Action` (déjà utilisés pour le CIR). Un exporter Langfuse env-gated reste branchable plus tard sans retoucher le pipeline.
+
+**Pièges :**
+- `_append()` ne lève jamais (try/except OSError) — le monitoring ne doit jamais casser une requête utilisateur.
+- Le callback `on_rag_feedback` est un **top-level** `@cl.action_callback`, pas imbriqué dans `on_message` (sinon il coupe la fin de la fonction).
+- `send_toast(message, type=...)` existe bien en Chainlit 2.11 (`cl.context.emitter`), mais gardé sous `contextlib.suppress` par prudence.
+
 ## Chainlit — Pièges connus
 
 **Lancement :** toujours avec `PYTHONPATH="." chainlit run src/chainlit_app.py --port 8001`
@@ -410,7 +452,22 @@ Prérequis : `unsafe_allow_html = true` dans `.chainlit/config.toml`.
 **Téléchargement .docx :** utiliser `cl.File(display="side")`, jamais `display="inline"`.
 Chainlit ne peut pas prévisualiser les .docx en inline — affiche silencieusement rien.
 
-**CSS — sélecteurs DOM Chainlit 2.x :** pas de `data-role="assistant"` ni `.message-content` dans le DOM réel. Inspecter le DOM réel pour cibler les bons sélecteurs.
+**CSS — sélecteurs DOM RÉELS de Chainlit 2.11.1** (vérifiés sur le build, session 2026-07-07) :
+
+| Élément | Sélecteur réel | Notes |
+|---|---|---|
+| Header (barre du haut) | `#header` | `justify-between`. Le **nom de l'appli n'y est PAS rendu** (seulement dans `<title>`) → injecté via `#header::before { content: "…" }` (hardcodé, resync si `name` change dans `config.toml`) |
+| Message assistant | `.ai-message .message-content` | `.message-content` = conteneur texte (assistant/système uniquement) |
+| Bulle utilisateur | `[id^="step-"] div.bg-accent.rounded-3xl` | ⚠ **Scoper à `[id^="step-"]`** : le composer `#message-composer` porte les MÊMES classes `.bg-accent.rounded-3xl` mais hors d'un step. Sans scope → la zone de saisie devient stylée comme une bulle |
+| Composer (saisie) | `#message-composer` | `bg-accent dark:bg-card rounded-3xl` |
+| Step / CoT | `.step[data-step-type]` | un step terminé s'affiche préfixé « Utilisé … » (préfixe FR par défaut) |
+
+`≠` NE PAS utiliser (n'existent pas dans le DOM 2.11) : `data-role="…"`, `.assistant-message`, `.message.user`, `.user-message`, `header`/`nav` (tags nus).
+Palette de base pilotée par **`public/theme.json`** (variables HSL shadcn `H S% L%`, blocs `light`+`dark`, injecté en `window.theme`) ; `public/stylesheet.css` n'ajoute que la personnalité ACCRO (polices, header sombre + titre jaune, bulles bordure encre + ombres, hovers).
+
+**Cache des assets `/public` :** Chainlit sert `/public` via un `FileResponse` nu (ETag + Last-Modified mais **sans** `Cache-Control` **ni gestion du 304**) → cache heuristique : après une modif de `stylesheet.css`, les utilisateurs gardent l'ancienne charte jusqu'à un hard refresh. Correctif : middleware dans `chainlit_app.py` (`from chainlit.server import app`) qui pose `Cache-Control: no-cache, must-revalidate` **sur le seul `.css`** (6 Ko, re-DL négligeable). NE PAS l'étendre aux polices (~450 Ko) : sans support du 304 elles seraient re-téléchargées à chaque page. `theme.json` non concerné (injecté inline, relu côté serveur).
+
+**Indicateur « réflexion » (RAG) :** dans `on_message`, la phase retrieval + démarrage LLM (avant le 1er token) est enveloppée dans `async with cl.Step(name="Recherche dans le corpus…")`. Le premier item de la queue est consommé DANS le step (gère aussi le cas fallback = `QueryResponse` sans token), le reste du flux dans une 2e boucle `while not stream_done`. Le flux CIR a ses propres steps (littérature, chargement).
 
 **Bulle vide sur fallback (réponse sans tokens streamés) :** un fallback (`found_in_corpus=False`, p.ex. déclenché par `absent_topics` avant génération) yield un `QueryResponse` **sans streamer aucun token**. Le handler `on_message` calcule `answer` mais ne l'écrit pas dans la bulle → **bulle vide**, ressenti comme « rien ne se passe » / appli figée. Correctif : après la boucle de streaming, si rien n'a été accumulé, écrire le texte explicitement :
 ```python
@@ -433,6 +490,7 @@ Piège de diagnostic : le symptôme imite un blocage websocket/navigateur, mais 
 | **Ingest / import** | `src/ingest/import_neo4j.py`, `src/ingest/embed_chunks.py`, `src/config.py` |
 | **Littérature** | `src/retrieval/literature.py` |
 | **Eval / metrics** | `scripts/eval_rag.py`, `data/testset.json` |
+| **Monitoring prod** | `src/query_log.py`, `src/chainlit_app.py` (on_message + on_rag_feedback), `src/models.py` (champs diagnostic) |
 | **Tests** | Fichier de test concerné + `src/` correspondant |
 
 ---

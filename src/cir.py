@@ -39,7 +39,7 @@ GROUPEMENTS_VALIDES: list[str] = [
 # (les runs DST sont classés "Muscles") → requête par chantier
 _CHANTIER_DST = "Installation ligne Emincés - Choix de la techno de texturation"
 
-_MAX_CONTEXT_CHARS = 120_000  # ~30k tokens — évite les débordements sur grands groupements
+_MAX_CONTEXT_CHARS = 800_000  # ~200k tokens — fenêtre 1M tokens sonnet-4-6
 
 _QUERY_BY_GROUPEMENT = """
 MATCH (rep:Run)
@@ -316,7 +316,7 @@ def _call_claude(
     )
     response = client.messages.create(
         model=CIR_LLM_MODEL,
-        max_tokens=16000,
+        max_tokens=128000,
         system=prompt,
         messages=[{"role": "user", "content": user_content}],
     )
@@ -496,7 +496,7 @@ def stream_fiche_cir(
 
     with anthropic_client.messages.stream(
         model=CIR_LLM_MODEL,
-        max_tokens=16000,
+        max_tokens=128000,
         system=prompt,
         messages=[{"role": "user", "content": user_content}],
     ) as stream:

@@ -125,7 +125,10 @@ description = "Posez vos questions sur les essais d'extrusion, les formulations 
 cot = "full"
 
 # Specify a CSS file that can be used to customize the user interface.
-custom_css = "/public/stylesheet.css"
+# ?v=N : bump unique pour éjecter les caches navigateur déjà figés (heuristique)
+# lors d'un changement de charte. Ensuite le middleware no-cache (chainlit_app.py)
+# garde le CSS à jour tout seul — inutile de re-bumper à chaque édition.
+custom_css = "/public/stylesheet.css?v=1"
 
 # Specify additional attributes for a custom CSS file
 # custom_css_attributes = "media=\"print\""

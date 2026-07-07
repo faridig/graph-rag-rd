@@ -9,9 +9,11 @@ import logging
 import os
 import re
 import threading
+import time
 
 import chainlit as cl
 from chainlit.input_widget import TextInput
+from chainlit.server import app as _fastapi_app
 
 from src.cir import (
     GROUPEMENTS_VALIDES,
@@ -21,6 +23,7 @@ from src.cir import (
     get_project_start_year,
     stream_fiche_cir,
 )
+from src.config import SSO_ENABLED
 from src.generation.rag_pipeline import (
     QueryResponse,
     build_pipeline,
@@ -28,11 +31,32 @@ from src.generation.rag_pipeline import (
     stream_query,
 )
 from src.models import Source
+from src.query_log import log_query, record_feedback
 from src.retrieval.literature import fetch_literature
-from src.config import SSO_ENABLED
 from src.usage_tracker import check_budget, record_usage
 
 _log = logging.getLogger(__name__)
+
+
+# ── Cache-busting du CSS custom ───────────────────────────────────────────────
+# Chainlit sert /public via un FileResponse nu (ETag + Last-Modified mais SANS
+# Cache-Control, et SANS gestion du 304 conditionnel) → cache heuristique du
+# navigateur. Après une modif de stylesheet.css, les utilisateurs gardaient
+# l'ancienne charte jusqu'à un hard refresh (Ctrl+Shift+R).
+# `no-cache` sur le SEUL .css force son re-téléchargement à chaque chargement
+# (6 Ko — négligeable) → charte toujours à jour. On NE touche PAS aux polices
+# (~450 Ko) ni aux images : sans support du 304, un no-cache global les
+# re-téléchargerait entièrement à chaque page. theme.json n'est pas concerné
+# (injecté inline dans le HTML, relu côté serveur à chaque chargement).
+# Middleware enregistré à l'import du module, avant le démarrage d'uvicorn.
+@_fastapi_app.middleware("http")
+async def _revalidate_custom_css(request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path.startswith("/public") and path.endswith(".css"):
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    return response
+
 
 # ── SSO Authentik (header-trust) ──────────────────────────────────────────────
 # SSO_ENABLED=false en sandbox — l'infra nxtdeploy le passe à true en prod.
@@ -366,6 +390,7 @@ async def on_message(message: cl.Message) -> None:
     history = _history_from_session()
     chantier: str = cl.user_session.get("chantier") or ""
 
+    _t0 = time.monotonic()
     msg = cl.Message(content="")
     await msg.send()
 
@@ -391,8 +416,26 @@ async def on_message(message: cl.Message) -> None:
 
     accumulated = ""
     final_response: QueryResponse | None = None
+    stream_done = False
 
-    while True:
+    # Indicateur de réflexion TRANSITOIRE : spinner visible pendant le retrieval
+    # + le démarrage du LLM (avant le 1er token), PUIS retiré dès l'arrivée de la
+    # réponse. Sans le .remove(), le step terminé resterait affiché en permanence
+    # sous la bulle (cot="full" garde les steps complétés → « Utilisé Recherche
+    # dans le corpus… » persistant).
+    async with cl.Step(name="Recherche dans le corpus…", show_input=False) as thinking:
+        item = await queue.get()
+        if item is None:
+            stream_done = True
+        elif isinstance(item, str):
+            accumulated += item
+            await msg.stream_token(_humanize_citations(item))
+        else:
+            final_response = item
+    await thinking.remove()
+
+    # Suite du flux (le premier item a déjà été consommé par le step ci-dessus)
+    while not stream_done:
         item = await queue.get()
         if item is None:
             break
@@ -416,8 +459,8 @@ async def on_message(message: cl.Message) -> None:
     if not accumulated and answer:
         await msg.stream_token(answer)
 
+    cited_ids = extract_cited_ids(final_response.answer)
     if final_response.found_in_corpus and final_response.sources:
-        cited_ids = extract_cited_ids(final_response.answer)
         display_sources = (
             [s for s in final_response.sources if s.run_id in cited_ids]
             or final_response.sources
@@ -426,6 +469,36 @@ async def on_message(message: cl.Message) -> None:
         # Append sources as a stream token — msg.update() alone doesn't
         # re-render already-streamed content in Chainlit 2.x.
         await msg.stream_token(f"\n\n<hr/><strong>Sources</strong>\n{sources_md}")
+
+    # ── Monitoring pertinence RAG (local, voir src/query_log.py) ──────────────
+    # Journalise les signaux de la requête et branche les boutons 👍/👎 dessus.
+    user = cl.user_session.get("user")
+    query_id = log_query(
+        question=message.content.strip(),
+        found_in_corpus=final_response.found_in_corpus,
+        dense_score=final_response.dense_score,
+        fallback_reason=final_response.fallback_reason,
+        n_chunks=final_response.n_chunks,
+        n_sources=len(final_response.sources),
+        n_cited=len(cited_ids),
+        input_tokens=final_response.input_tokens,
+        output_tokens=final_response.output_tokens,
+        latency_ms=int((time.monotonic() - _t0) * 1000),
+        chantier=chantier.strip() or None,
+        user=getattr(user, "identifier", None),
+    )
+    msg.actions = [
+        cl.Action(
+            name="rag_feedback",
+            label="👍 Pertinent",
+            payload={"query_id": query_id, "value": 1},
+        ),
+        cl.Action(
+            name="rag_feedback",
+            label="👎 Peu utile",
+            payload={"query_id": query_id, "value": 0},
+        ),
+    ]
 
     await msg.update()
 
@@ -440,3 +513,18 @@ async def on_message(message: cl.Message) -> None:
     current_history.append({"role": "user", "content": message.content.strip()})
     current_history.append({"role": "assistant", "content": history_entry_assistant})
     cl.user_session.set("history", current_history[-12:])  # keep last 6 exchanges
+
+
+@cl.action_callback("rag_feedback")
+async def on_rag_feedback(action: cl.Action) -> None:
+    """Retour utilisateur 👍/👎 sur une réponse RAG → data/query_log.jsonl."""
+    payload = action.payload or {}
+    query_id = payload.get("query_id")
+    value = int(payload.get("value", 0))
+    if query_id:
+        await asyncio.to_thread(record_feedback, query_id, value)
+    await action.remove()
+    with contextlib.suppress(Exception):
+        await cl.context.emitter.send_toast(
+            "Merci pour votre retour !", type="success"
+        )
