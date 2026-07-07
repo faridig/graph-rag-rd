@@ -1,4 +1,4 @@
-"""Fetches relevant literature from Semantic Scholar and PubMed for CIR section-1 state of the art."""
+"""Fetches literature from Semantic Scholar and PubMed for CIR section-1 state of the art."""
 
 from __future__ import annotations
 
@@ -18,8 +18,8 @@ _MAX_ABSTRACT_CHARS = 350
 _CACHE_TTL_S = 3600  # 1 h — évite de rejouer l'API pour le même groupement
 _cache: dict[str, tuple[str, float]] = {}  # groupement -> (result, timestamp)
 _FIELDS_OF_STUDY = ["Agricultural and Food Sciences", "Biology", "Chemistry", "Engineering"]
-_YEAR_FILTER_FROM = 2010      # papers from 2010 onwards (lower bound)
-_MIN_CITATIONS = 3            # filter noise, keep cited work
+_YEAR_FILTER_FROM = 2010  # papers from 2010 onwards (lower bound)
+_MIN_CITATIONS = 3  # filter noise, keep cited work
 _FIELDS = ["title", "authors", "year", "abstract", "citationCount"]
 
 _PUBMED_BASE = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
@@ -71,9 +71,12 @@ def _fetch_pubmed(query: str, limit: int, maxdate: str | None = None) -> list[di
     """Search PubMed and return a list of dicts with title/authors/year/abstract."""
     # Step 1 — esearch: get PMIDs
     params: dict = {
-        "db": "pubmed", "term": query,
-        "retmax": limit, "retmode": "json",
-        "datetype": "pdat", "mindate": "2010",
+        "db": "pubmed",
+        "term": query,
+        "retmax": limit,
+        "retmode": "json",
+        "datetype": "pdat",
+        "mindate": "2010",
     }
     if maxdate:
         params["maxdate"] = maxdate
@@ -85,10 +88,15 @@ def _fetch_pubmed(query: str, limit: int, maxdate: str | None = None) -> list[di
     time.sleep(0.4)  # NCBI: 3 req/s without API key
 
     # Step 2 — efetch: get full records with abstracts
-    raw_xml = _pubmed_get("efetch.fcgi", {
-        "db": "pubmed", "id": ",".join(pmids),
-        "retmode": "xml", "rettype": "abstract",
-    })
+    raw_xml = _pubmed_get(
+        "efetch.fcgi",
+        {
+            "db": "pubmed",
+            "id": ",".join(pmids),
+            "retmode": "xml",
+            "rettype": "abstract",
+        },
+    )
     root = ET.fromstring(raw_xml)
     papers = []
     for article in root.findall(".//PubmedArticle"):
@@ -102,10 +110,7 @@ def _fetch_pubmed(query: str, limit: int, maxdate: str | None = None) -> list[di
         if not title:
             continue
         # Year — try multiple paths
-        year = (
-            mc.findtext(".//PubDate/Year")
-            or mc.findtext(".//PubDate/MedlineDate", "?")[:4]
-        )
+        year = mc.findtext(".//PubDate/Year") or mc.findtext(".//PubDate/MedlineDate", "?")[:4]
         # Authors
         authors = [
             " ".join(filter(None, [a.findtext("ForeName"), a.findtext("LastName")]))
@@ -117,10 +122,15 @@ def _fetch_pubmed(query: str, limit: int, maxdate: str | None = None) -> list[di
             (t.text or "") for t in art.findall("Abstract/AbstractText") if t.text
         ).strip()
         pmid = mc.findtext("PMID") or ""
-        papers.append({
-            "pmid": pmid, "title": title,
-            "authors": authors, "year": year, "abstract": abstract,
-        })
+        papers.append(
+            {
+                "pmid": pmid,
+                "title": title,
+                "authors": authors,
+                "year": year,
+                "abstract": abstract,
+            }
+        )
     return papers
 
 
@@ -180,14 +190,16 @@ def _collect_s2(groupement: str, max_papers: int, year_max: int | None = None) -
         if len(papers) >= max_papers:
             break
         try:
-            results = list(sch.search_paper(
-                query,
-                fields=_FIELDS,
-                fields_of_study=_FIELDS_OF_STUDY,
-                year=year_filter,
-                min_citation_count=_MIN_CITATIONS,
-                limit=per_query,
-            ))
+            results = list(
+                sch.search_paper(
+                    query,
+                    fields=_FIELDS,
+                    fields_of_study=_FIELDS_OF_STUDY,
+                    year=year_filter,
+                    min_citation_count=_MIN_CITATIONS,
+                    limit=per_query,
+                )
+            )
         except Exception as exc:
             _log.warning("Semantic Scholar unavailable (%s) — skipping: %s", exc, query)
             continue
@@ -273,18 +285,22 @@ def fetch_literature(groupement: str, max_papers: int = 8, year_max: int | None 
 
     # Sort: S2 papers with citationCount first, then PubMed (no citation count)
     all_papers.sort(
-        key=lambda p: getattr(p, "citationCount", None) or 0
-        if not isinstance(p, dict) else 0,
+        key=lambda p: getattr(p, "citationCount", None) or 0 if not isinstance(p, dict) else 0,
         reverse=True,
     )
     batch = all_papers[:max_papers]
     formatted = "\n".join(_format_paper(p) for p in batch)
     n_s2 = sum(1 for p in batch if not isinstance(p, dict))
     n_pm = sum(1 for p in batch if isinstance(p, dict))
-    sources = " + ".join(filter(None, [
-        f"Semantic Scholar ×{n_s2}" if n_s2 else "",
-        f"PubMed ×{n_pm}" if n_pm else "",
-    ]))
+    sources = " + ".join(
+        filter(
+            None,
+            [
+                f"Semantic Scholar ×{n_s2}" if n_s2 else "",
+                f"PubMed ×{n_pm}" if n_pm else "",
+            ],
+        )
+    )
     result = (
         f"RÉFÉRENCES DE LA LITTÉRATURE SCIENTIFIQUE ({len(batch)} articles — {sources}) :\n"
         "Ces articles sont fournis pour alimenter la section 1a (état de l'art). "

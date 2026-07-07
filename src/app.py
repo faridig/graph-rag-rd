@@ -6,8 +6,6 @@ import logging
 import re
 from collections.abc import Iterator
 
-_log = logging.getLogger(__name__)
-
 import gradio as gr
 
 from src.generation.rag_pipeline import (
@@ -18,6 +16,7 @@ from src.generation.rag_pipeline import (
 )
 from src.models import Source
 
+_log = logging.getLogger(__name__)
 _pipeline = build_pipeline()
 _RUN_ID_RE = re.compile(r"\[source:\s*([^\]]+)\]")
 
@@ -25,44 +24,65 @@ _STATIC = "src/static"
 
 # ── ACCRO theme ───────────────────────────────────────────────────────────────
 _PINK = gr.themes.Color(
-    c50="#fdeaf3", c100="#fbd5e8", c200="#f7aad1", c300="#f37fba",
-    c400="#ef55a3", c500="#e72f7f", c600="#c4196a", c700="#a8175a",
-    c800="#8b1249", c900="#6e0d38", c950="#510a29",
+    c50="#fdeaf3",
+    c100="#fbd5e8",
+    c200="#f7aad1",
+    c300="#f37fba",
+    c400="#ef55a3",
+    c500="#e72f7f",
+    c600="#c4196a",
+    c700="#a8175a",
+    c800="#8b1249",
+    c900="#6e0d38",
+    c950="#510a29",
 )
 _GREEN = gr.themes.Color(
-    c50="#eef6e9", c100="#d4ecca", c200="#a9d895", c300="#7fc460",
-    c400="#65b442", c500="#499b2d", c600="#3a7e23", c700="#2c6119",
-    c800="#1e4410", c900="#102808", c950="#080f04",
+    c50="#eef6e9",
+    c100="#d4ecca",
+    c200="#a9d895",
+    c300="#7fc460",
+    c400="#65b442",
+    c500="#499b2d",
+    c600="#3a7e23",
+    c700="#2c6119",
+    c800="#1e4410",
+    c900="#102808",
+    c950="#080f04",
 )
 _INK = gr.themes.Color(
-    c50="#f5f4ee", c100="#ebebe4", c200="#d6d6cf", c300="#a9aaa3",
-    c400="#8a8b85", c500="#6b6c66", c600="#55564f", c700="#3a3b37",
-    c800="#2a2b27", c900="#1b1c18", c950="#151614",
+    c50="#f5f4ee",
+    c100="#ebebe4",
+    c200="#d6d6cf",
+    c300="#a9aaa3",
+    c400="#8a8b85",
+    c500="#6b6c66",
+    c600="#55564f",
+    c700="#3a3b37",
+    c800="#2a2b27",
+    c900="#1b1c18",
+    c950="#151614",
 )
 
-_accro_theme = (
-    gr.themes.Base(
-        primary_hue=_PINK,
-        secondary_hue=_GREEN,
-        neutral_hue=_INK,
-        font=[gr.themes.GoogleFont("Montserrat"), "sans-serif"],
-    )
-    .set(
-        body_background_fill="#fbf6ec",
-        body_background_fill_dark="#fbf6ec",
-        background_fill_primary="#fbf6ec",
-        background_fill_secondary="#ffffff",
-        border_color_primary="#151614",
-        border_color_accent="#e72f7f",
-        button_primary_background_fill="#e72f7f",
-        button_primary_background_fill_hover="#c4196a",
-        button_primary_text_color="#ffffff",
-        button_primary_border_color="#151614",
-        button_secondary_background_fill="#ffffff",
-        input_background_fill="#ffffff",
-        block_background_fill="#fbf6ec",
-        panel_background_fill="#fbf6ec",
-    )
+_accro_theme = gr.themes.Base(
+    primary_hue=_PINK,
+    secondary_hue=_GREEN,
+    neutral_hue=_INK,
+    font=[gr.themes.GoogleFont("Montserrat"), "sans-serif"],
+).set(
+    body_background_fill="#fbf6ec",
+    body_background_fill_dark="#fbf6ec",
+    background_fill_primary="#fbf6ec",
+    background_fill_secondary="#ffffff",
+    border_color_primary="#151614",
+    border_color_accent="#e72f7f",
+    button_primary_background_fill="#e72f7f",
+    button_primary_background_fill_hover="#c4196a",
+    button_primary_text_color="#ffffff",
+    button_primary_border_color="#151614",
+    button_secondary_background_fill="#ffffff",
+    input_background_fill="#ffffff",
+    block_background_fill="#fbf6ec",
+    panel_background_fill="#fbf6ec",
 )
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
@@ -263,7 +283,8 @@ _INJECT_HEADER = f"""
     '<img class="accro-hdr-logo" src="' + logo + '" alt="ACCRO" />' +
     '<div class="accro-hdr-body">' +
       '<div class="accro-hdr-title">ACCRO <em>R&D</em> — <em>Base de connaissances</em></div>' +
-      '<div class="accro-hdr-desc">Répertoire R&D · Extrusion · Formulations · Résultats mesurés</div>' +
+      '<div class="accro-hdr-desc">Répertoire R&D · Extrusion · ' +
+      'Formulations · Résultats mesurés</div>' +
     '</div>' +
     '<span class="accro-hdr-badge">100 % végétal</span>';
   const container = document.querySelector('.gradio-container') || document.body;
@@ -337,7 +358,10 @@ def chat_fn(
                 final_response = item
     except Exception:
         _log.exception("stream_query failed")
-        yield "Une erreur est survenue lors de la recherche. Vérifiez que Neo4j est démarré (`docker compose up -d`)."
+        yield (
+            "Une erreur est survenue lors de la recherche. "
+            "Vérifiez que Neo4j est démarré (`docker compose up -d`)."
+        )
         return
 
     if final_response is None:
@@ -347,10 +371,9 @@ def chat_fn(
 
     if final_response.found_in_corpus and final_response.sources:
         cited_ids = extract_cited_ids(final_response.answer)
-        display_sources = (
-            [s for s in final_response.sources if s.run_id in cited_ids]
-            or final_response.sources
-        )
+        display_sources = [
+            s for s in final_response.sources if s.run_id in cited_ids
+        ] or final_response.sources
         sources_md = _build_sources_md(display_sources)
         yield f"{answer}\n\n---\n**Sources**\n{sources_md}"
     else:

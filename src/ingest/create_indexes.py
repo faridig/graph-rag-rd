@@ -26,8 +26,7 @@ _DDL: list[tuple[str, str]] = [
     ),
     (
         "index:chunk_fulltext",
-        "CREATE FULLTEXT INDEX chunk_fulltext IF NOT EXISTS"
-        " FOR (c:Chunk) ON EACH [c.text]",
+        "CREATE FULLTEXT INDEX chunk_fulltext IF NOT EXISTS FOR (c:Chunk) ON EACH [c.text]",
     ),
     (
         "index:run_fulltext",
@@ -66,8 +65,7 @@ _INDEX_NAMES: list[str] = [
 def verify_indexes(driver: Driver) -> list[dict]:
     with driver.session() as session:
         result = session.run(
-            "SHOW INDEXES YIELD name, type, state"
-            " WHERE name IN $names RETURN name, type, state",
+            "SHOW INDEXES YIELD name, type, state WHERE name IN $names RETURN name, type, state",
             names=_INDEX_NAMES,
         )
         return [dict(r) for r in result]

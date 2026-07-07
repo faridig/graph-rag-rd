@@ -59,8 +59,11 @@ def _exp_id_for_doc(doc_path: Path) -> str:
                 "Could not read exp_id from %s — falling back to filename", knowledge_path.name
             )
     else:
-        logger.warning("No knowledge JSON found beside %s — falling back to filename", doc_path.name)
+        logger.warning(
+            "No knowledge JSON found beside %s — falling back to filename", doc_path.name
+        )
     return doc_path.stem.replace("_documentation", "")
+
 
 _FACTOR_KEYS = ("chantier", "pole", "lead", "status", "cir_grouping")
 _FACTOR_ALT = "|".join(_FACTOR_KEYS)
@@ -115,7 +118,7 @@ def _chunk_run_detail(content: str, source_file: str, experiment_id: str) -> lis
 
         # For the last run, strip post-run sections (## 4, ## 5, …) so its
         # embedding reflects only the run data, not the experiment summary.
-        is_last = (i + 2 >= len(parts))
+        is_last = i + 2 >= len(parts)
         if is_last:
             # Everything from the first level-2 heading (## N.) is summary material.
             m = re.search(r"\n## \d+\.", section)
@@ -189,7 +192,7 @@ def _chunk_run_detail(content: str, source_file: str, experiment_id: str) -> lis
         if not m_num:
             continue
         sec_num = m_num.group(1)
-        body = sec_raw[sec_raw.index("\n"):].strip() if "\n" in sec_raw else ""
+        body = sec_raw[sec_raw.index("\n") :].strip() if "\n" in sec_raw else ""
         if len(body) < 50:
             continue
 
@@ -409,7 +412,12 @@ def main() -> None:
             to_embed = [c for c in chunks if existing_hashes.get(c["id"]) != c["text_hash"]]
             skipped = len(chunks) - len(to_embed)
 
-            logger.info("  %d chunks: %d to embed, %d unchanged (skipped)", len(chunks), len(to_embed), skipped)
+            logger.info(
+                "  %d chunks: %d to embed, %d unchanged (skipped)",
+                len(chunks),
+                len(to_embed),
+                skipped,
+            )
 
             for idx, chunk in enumerate(to_embed):
                 chunk["embedding"] = embed_text(client, chunk["text"])

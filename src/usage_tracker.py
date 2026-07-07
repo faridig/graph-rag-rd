@@ -36,13 +36,10 @@ def _save(data: dict) -> None:
 
 def record_usage(input_tokens: int, output_tokens: int) -> float:
     """Enregistre une consommation et retourne le coût ajouté (EUR)."""
-    cost_usd = (
-        input_tokens * _INPUT_COST_PER_TOKEN_USD
-        + output_tokens * _OUTPUT_COST_PER_TOKEN_USD
-    )
+    cost_usd = input_tokens * _INPUT_COST_PER_TOKEN_USD + output_tokens * _OUTPUT_COST_PER_TOKEN_USD
     cost_eur = cost_usd * USD_TO_EUR
     today = date.today()
-    day_key = today.isoformat()          # "2026-06-23"
+    day_key = today.isoformat()  # "2026-06-23"
     month_key = today.strftime("%Y-%m")  # "2026-06"
 
     with _lock:
@@ -60,7 +57,9 @@ def record_usage(input_tokens: int, output_tokens: int) -> float:
 
     _log.info(
         "Usage recorded: +%d in / +%d out / +€%.4f",
-        input_tokens, output_tokens, cost_eur,
+        input_tokens,
+        output_tokens,
+        cost_eur,
     )
     return cost_eur
 

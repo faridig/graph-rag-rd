@@ -128,9 +128,7 @@ class _RunRow:
     summary_text: str | None
 
 
-def _fetch_rows(
-    driver: Driver, groupement: str, cir_year: int | None = None
-) -> list[_RunRow]:
+def _fetch_rows(driver: Driver, groupement: str, cir_year: int | None = None) -> list[_RunRow]:
     year_prefix = str(cir_year) if cir_year else None
     with driver.session() as session:
         if groupement == "Nouvelles voies de texturation des protéines végétales":
@@ -311,8 +309,7 @@ def _call_claude(
             f"au démarrage des travaux et ne peut pas fonder le verrou scientifique."
         )
     user_content = (
-        f"En-tête de la fiche (à compléter) :\n{header}\n\n"
-        f"Essais R&D disponibles :\n{context}"
+        f"En-tête de la fiche (à compléter) :\n{header}\n\nEssais R&D disponibles :\n{context}"
     )
     response = client.messages.create(
         model=CIR_LLM_MODEL,
@@ -467,9 +464,7 @@ def stream_fiche_cir(
             "Les données disponibles sont insuffisantes pour documenter un verrou "
             "scientifique et une démarche expérimentale au sens Frascati."
         )
-        yield CirResponse(
-            groupement=groupement, fiche=fiche, data_quality=quality, sources=sources
-        )
+        yield CirResponse(groupement=groupement, fiche=fiche, data_quality=quality, sources=sources)
         return
 
     header = _build_header(groupement, rows)
@@ -487,8 +482,7 @@ def stream_fiche_cir(
             f"au démarrage des travaux et ne peut pas fonder le verrou scientifique."
         )
     user_content = (
-        f"En-tête de la fiche (à compléter) :\n{header}\n\n"
-        f"Essais R&D disponibles :\n{context}"
+        f"En-tête de la fiche (à compléter) :\n{header}\n\nEssais R&D disponibles :\n{context}"
     )
 
     text_chunks: list[str] = []
@@ -626,6 +620,7 @@ def export_docx(response: CirResponse, output_path: str) -> None:
 
 def build_cir_clients() -> tuple[Driver, anthropic.Anthropic]:
     from neo4j import GraphDatabase
+
     driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     return driver, client

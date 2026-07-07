@@ -20,12 +20,12 @@ _ESSAIS_MDD_BASE = (
 
 # Experiment-level URLs with sheet anchors for MDD onglet experiments
 _MDD_EXPERIMENT_URLS: dict[str, str] = {
-    "MDD-STEAKS-BURGER":            f"{_ESSAIS_MDD_BASE}#'steaks burger'!A1",
-    "ESSAIS-MDD-STEAKS-CARREFOUR":  f"{_ESSAIS_MDD_BASE}#'Steaks Carrefour'!A1",
-    "ESSAIS-MDD-ALLUMETTES":        f"{_ESSAIS_MDD_BASE}#'Allumettes'!A1",
-    "ESSAIS-MDD-KEFTA":             f"{_ESSAIS_MDD_BASE}#'kefta'!A1",
-    "ESSAIS-MDD-EMINCÉS-TEX-MEX":   f"{_ESSAIS_MDD_BASE}#'émincés tex mex'!A1",
-    "MDD-ESSAIS":                   _ESSAIS_MDD_BASE,
+    "MDD-STEAKS-BURGER": f"{_ESSAIS_MDD_BASE}#'steaks burger'!A1",
+    "ESSAIS-MDD-STEAKS-CARREFOUR": f"{_ESSAIS_MDD_BASE}#'Steaks Carrefour'!A1",
+    "ESSAIS-MDD-ALLUMETTES": f"{_ESSAIS_MDD_BASE}#'Allumettes'!A1",
+    "ESSAIS-MDD-KEFTA": f"{_ESSAIS_MDD_BASE}#'kefta'!A1",
+    "ESSAIS-MDD-EMINCÉS-TEX-MEX": f"{_ESSAIS_MDD_BASE}#'émincés tex mex'!A1",
+    "MDD-ESSAIS": _ESSAIS_MDD_BASE,
 }
 
 # Static fallback for the 5 experiments that existed before dynamic URL tracking
@@ -98,8 +98,8 @@ def _normalize_url(url: str) -> str | None:
         absolute = url
     else:
         # Strip leading ../ chain, then check for SharePoint sharing pattern
-        stripped = re.sub(r'^(\.\./)+', '', url)
-        if re.match(r':[a-z]:/[sr]/', stripped):
+        stripped = re.sub(r"^(\.\./)+", "", url)
+        if re.match(r":[a-z]:/[sr]/", stripped):
             absolute = f"{_SP_BASE}/{stripped}"
         else:
             # Relative file path — cannot resolve without SharePoint tree context
@@ -109,13 +109,15 @@ def _normalize_url(url: str) -> str | None:
     absolute = absolute.replace("action=editnew", "action=default")
 
     # Fix double-encoded percent sequences: %25XX → %XX
-    absolute = re.sub(r'%25([0-9A-Fa-f]{2})', r'%\1', absolute)
+    absolute = re.sub(r"%25([0-9A-Fa-f]{2})", r"%\1", absolute)
+
     # Fix JavaScript-style unicode escapes %uXXXX or %25uXXXX → proper UTF-8 percent-encoding
     def _encode_unicode_escape(m: re.Match) -> str:
         char = chr(int(m.group(1), 16))
         return "".join(f"%{b:02X}" for b in char.encode("utf-8"))
-    absolute = re.sub(r'%25u([0-9A-Fa-f]{4})', lambda m: _encode_unicode_escape(m), absolute)
-    absolute = re.sub(r'%u([0-9A-Fa-f]{4})', lambda m: _encode_unicode_escape(m), absolute)
+
+    absolute = re.sub(r"%25u([0-9A-Fa-f]{4})", lambda m: _encode_unicode_escape(m), absolute)
+    absolute = re.sub(r"%u([0-9A-Fa-f]{4})", lambda m: _encode_unicode_escape(m), absolute)
 
     return absolute
 
@@ -134,7 +136,10 @@ def _load_log_urls() -> dict[str, str]:
     for fuzzy matching.
     """
     if not _DOWNLOAD_LOG.exists():
-        _log.warning("download.log not found at %s — SharePoint URLs will use static fallback only", _DOWNLOAD_LOG)
+        _log.warning(
+            "download.log not found at %s — SharePoint URLs will use static fallback only",
+            _DOWNLOAD_LOG,
+        )
         return {}
 
     text = _DOWNLOAD_LOG.read_text(encoding="utf-8", errors="replace")
@@ -145,14 +150,14 @@ def _load_log_urls() -> dict[str, str]:
         url = _normalize_url(raw_url)
         if not url:
             continue
-        key = re.sub(r'\.(xlsx|xlsm|docx|csv)$', '', label, flags=re.IGNORECASE).lower().strip()
+        key = re.sub(r"\.(xlsx|xlsm|docx|csv)$", "", label, flags=re.IGNORECASE).lower().strip()
         mapping[key] = url
         mapping[label.lower().strip()] = url
 
     # Pass 2: WEBURL entries (higher priority — real webUrl from Graph API)
     for label, web_url in _WEBURL_RE.findall(text):
         url = _normalize_url(web_url) or web_url  # webUrl is already absolute
-        key = re.sub(r'\.(xlsx|xlsm|docx|csv)$', '', label, flags=re.IGNORECASE).lower().strip()
+        key = re.sub(r"\.(xlsx|xlsm|docx|csv)$", "", label, flags=re.IGNORECASE).lower().strip()
         mapping[key] = url
         mapping[label.lower().strip()] = url
 
@@ -167,12 +172,13 @@ def get_url_for_file(filename: str) -> str | None:
     if key in log_map:
         return log_map[key]
     # Try without extension
-    key_no_ext = re.sub(r'\.(xlsx|xlsm|docx|csv)$', '', key, flags=re.IGNORECASE).strip()
+    key_no_ext = re.sub(r"\.(xlsx|xlsm|docx|csv)$", "", key, flags=re.IGNORECASE).strip()
     return log_map.get(key_no_ext)
 
 
 # ---------------------------------------------------------------------------
 # Public API (used by rag_pipeline.py)
+
 
 def get_sharepoint_url(experiment_id: str) -> str | None:
     """Return SharePoint URL for an experiment_id (static fallback only).

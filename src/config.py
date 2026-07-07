@@ -22,9 +22,7 @@ TOP_K_DEFAULT: int = 6
 CORPUS_SCOPE: list[str] = []
 
 # Chemin vers la liste des sujets absents du corpus (rechargé périodiquement).
-ABSENT_TOPICS_PATH: str = os.path.join(
-    os.path.dirname(__file__), "..", "data", "absent_topics.txt"
-)
+ABSENT_TOPICS_PATH: str = os.path.join(os.path.dirname(__file__), "..", "data", "absent_topics.txt")
 
 # TTL en secondes pour le rechargement des sets d'IDs Neo4j et du fichier absent_topics.
 # Valeur 0 = rechargement à chaque requête (désactiver en prod si Neo4j est lent).

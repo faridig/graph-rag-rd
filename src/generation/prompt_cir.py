@@ -183,7 +183,7 @@ SYSTEM_PROMPT_CIR_MUSCLES = (
     "pour le Ministère de l'Enseignement Supérieur et de la Recherche (MESRI).\n"
     "\n"
     "Tu dois rédiger la fiche technique pour l'opération de R&D "
-    "\"Muscles à base de protéines végétales\" à partir des essais fournis.\n"
+    '"Muscles à base de protéines végétales" à partir des essais fournis.\n'
     "\n"
     "CONTEXTE SCIENTIFIQUE DE L'OPÉRATION :\n"
     "Le procédé HME (High-Moisture Extrusion) génère une structure fibrée anisotrope "
@@ -195,8 +195,7 @@ SYSTEM_PROMPT_CIR_MUSCLES = (
     "ne couvre pas les conditions propres aux recettes ACCRO.\n"
     "- Reproductibilité inter-lots : l'anisotropie varie pour des paramètres nominalement "
     "identiques, sans modèle prédictif disponible.\n"
-    "\n"
-    + _REGLES_MESRI + "\n"
+    "\n" + _REGLES_MESRI + "\n"
     "\n"
     "INSTRUCTIONS SPÉCIFIQUES :\n"
     "- Section 1a (état de l'art) : s'appuyer sur le bloc RÉFÉRENCES injecté pour citer "
@@ -205,7 +204,7 @@ SYSTEM_PROMPT_CIR_MUSCLES = (
     "entre les paramètres procédé ACCRO (SME, T°, débit) et les ingrédients spécifiques "
     "(souches protéiques, fibres, liants) des recettes M03/FIB/ACE/KOBE.\n"
     "- Section 1b : formuler l'incertitude depuis le point de vue d'AVANT les essais : "
-    "\"On ignorait si/comment [ingrédient X] se comporterait dans la matrice HME ACCRO "
+    '"On ignorait si/comment [ingrédient X] se comporterait dans la matrice HME ACCRO '
     "aux niveaux d'hydratation [Y%].\"\n"
     "- Section 1c (distinction R&D) : expliquer que les mécanismes physico-chimiques "
     "impliqués (dénaturation protéique sous cisaillement, gélification par réarrangement "
@@ -216,12 +215,12 @@ SYSTEM_PROMPT_CIR_MUSCLES = (
     "énoncer l'hypothèse testée AVANT les essais, puis indiquer les paramètres variés.\n"
     "- Section 3 : pour chaque résultat significatif, indiquer la valeur de référence "
     "(run sans l'ingrédient testé) et la valeur modifiée. Sous-paragraphe obligatoire "
-    "\"Essais non concluants ou partiels\".\n"
+    '"Essais non concluants ou partiels".\n'
     "- Section 4a : ancrer les apports sur la littérature (cf. Règle 16) : "
-    "\"Aucune publication identifiée ne couvre [X] dans ces conditions — "
-    "on établit désormais que [Y].\"\n"
+    '"Aucune publication identifiée ne couvre [X] dans ces conditions — '
+    'on établit désormais que [Y]."\n'
     "- Section 4b : règles du type "
-    "\"Au-delà de X% de [ingrédient], [propriété] chute de Y% quelle que soit la recette.\"\n"
+    '"Au-delà de X% de [ingrédient], [propriété] chute de Y% quelle que soit la recette."\n'
     "- Section 5 : identifier les questions restées ouvertes et proposer 2-3 essais "
     "prioritaires pour la prochaine campagne.\n"
     "- Essais STRIP (colorants, arômes, épices) : ne PAS créer d'axe R&D dédié "
@@ -243,7 +242,7 @@ SYSTEM_PROMPT_CIR_PRODUITS = (
     "pour le Ministère de l'Enseignement Supérieur et de la Recherche (MESRI).\n"
     "\n"
     "Tu dois rédiger la fiche technique pour l'opération de R&D "
-    "\"Produits élaborés à base de muscle végétaux\" à partir des essais fournis.\n"
+    '"Produits élaborés à base de muscle végétaux" à partir des essais fournis.\n'
     "\n"
     "CONTEXTE SCIENTIFIQUE DE L'OPÉRATION :\n"
     "Le verrou central est la reproduction des propriétés organoleptiques de produits "
@@ -258,8 +257,7 @@ SYSTEM_PROMPT_CIR_PRODUITS = (
     "- Développement aromatique : les voies de Maillard avec les protéines végétales "
     "sont documentées en laboratoire mais non reproductibles en conditions industrielles "
     "ACCRO sans expérimentation spécifique.\n"
-    "\n"
-    + _REGLES_MESRI + "\n"
+    "\n" + _REGLES_MESRI + "\n"
     "\n"
     "INSTRUCTIONS SPÉCIFIQUES :\n"
     "- Section 1a (état de l'art) : s'appuyer sur le bloc RÉFÉRENCES injecté pour citer "
@@ -270,7 +268,7 @@ SYSTEM_PROMPT_CIR_PRODUITS = (
     "les conditions ACCRO.\n"
     "- Section 1b : formuler l'incertitude avant les essais : \"On ignorait si [liant X / "
     "protocole Y] permettrait d'atteindre [rétention d'eau / cohésion] comparable à "
-    "la viande dans les conditions ACCRO.\"\n"
+    'la viande dans les conditions ACCRO."\n'
     "- Section 1c (distinction R&D) : chaque nouvelle référence produit constitue une "
     "formulation dont le résultat sensoriel est non prévisible avant dégustation — pas "
     "de l'optimisation de recette connue mais la découverte d'une fenêtre de formulation.\n"
@@ -280,13 +278,13 @@ SYSTEM_PROMPT_CIR_PRODUITS = (
     "- Section 3 : pour les formulations testées en dégustation, indiquer le verdict "
     "(validé / rejeté / en cours) et les scores sensoriels si disponibles avec type "
     "de panel et nombre de participants. "
-    "Sous-paragraphe obligatoire \"Formulations rejetées en dégustation\" — "
+    'Sous-paragraphe obligatoire "Formulations rejetées en dégustation" — '
     "ces rejets prouvent l'incertitude réelle.\n"
     "- Section 4a : ancrer les apports sur la littérature (cf. Règle 16) : "
-    "\"Aucune publication identifiée ne couvre [X] dans ces conditions — "
-    "on établit désormais que [Y].\"\n"
+    '"Aucune publication identifiée ne couvre [X] dans ces conditions — '
+    'on établit désormais que [Y]."\n'
     "- Section 4b : règles transférables du type "
-    "\"Pour obtenir [propriété] avec [famille protéine], [règle opératoire].\"\n"
+    '"Pour obtenir [propriété] avec [famille protéine], [règle opératoire]."\n'
     "- Section 5 : questions ouvertes restantes + 2-3 axes prioritaires pour la suite.\n"
     "- Section SOURCES : liste run_id + lien SharePoint si disponible.\n"
 )
@@ -296,7 +294,7 @@ SYSTEM_PROMPT_CIR_NOUVELLES_VOIES = (
     "pour le Ministère de l'Enseignement Supérieur et de la Recherche (MESRI).\n"
     "\n"
     "Tu dois rédiger la fiche technique pour l'opération de R&D "
-    "\"Nouvelles voies de texturation des protéines végétales\" à partir des essais fournis.\n"
+    '"Nouvelles voies de texturation des protéines végétales" à partir des essais fournis.\n'
     "\n"
     "CONTEXTE SCIENTIFIQUE DE L'OPÉRATION :\n"
     "Le procédé DST (Direct Shear Technology, équipement Sheartex, fournisseur Sobatech) "
@@ -310,8 +308,7 @@ SYSTEM_PROMPT_CIR_NOUVELLES_VOIES = (
     "n'est pas connue pour ce couple procédé/recette.\n"
     "- Les interactions DST/ingrédients (liant, fibres, taux humidité) sont inexplorées "
     "dans ce contexte.\n"
-    "\n"
-    + _REGLES_MESRI + "\n"
+    "\n" + _REGLES_MESRI + "\n"
     "\n"
     "INSTRUCTIONS SPÉCIFIQUES :\n"
     "- Section 1a (état de l'art) : s'appuyer sur le bloc RÉFÉRENCES injecté pour citer "
@@ -322,21 +319,21 @@ SYSTEM_PROMPT_CIR_NOUVELLES_VOIES = (
     "sont des valeurs de démarrage génériques, non validées pour les conditions ACCRO.\n"
     "- Section 1b : formuler l'incertitude avant les essais : \"On ignorait si le procédé "
     "DST permettrait d'obtenir une fibration acceptable avec les recettes ACCRO et à quels "
-    "paramètres (T°, débit, vitesse rotor).\"\n"
+    'paramètres (T°, débit, vitesse rotor)."\n'
     "- Section 1c (distinction R&D) : démarrer avec les paramètres fournisseur constitue "
     "un point de départ, non une solution — la fenêtre de fibration pour les recettes ACCRO "
     "est entièrement à découvrir, les interactions DST/ingrédients étant inexplorées.\n"
     "- Section 2 : ordre chronologique des essais exploratoires. Pour chaque étape, "
     "énoncer l'hypothèse testée (ex. \"Hypothèse : augmenter T° de X à Y°C améliorerait "
-    "la fibration\") AVANT de décrire les paramètres variés et résultats obtenus.\n"
+    'la fibration") AVANT de décrire les paramètres variés et résultats obtenus.\n'
     "- Section 3 : distinguer les runs avec fibration obtenue / partielle / absente. "
-    "Sous-paragraphe \"Runs sans fibration\" obligatoire. "
+    'Sous-paragraphe "Runs sans fibration" obligatoire. '
     "Toute valeur de texture ou d'anisotropie mesurée doit être citée.\n"
     "- Section 4a : ancrer les apports sur la littérature (cf. Règle 16) : "
-    "\"Aucune publication identifiée ne couvre [X] dans ces conditions — "
-    "on établit désormais que [Y].\"\n"
-    "- Section 4b : règle de fenêtre de fibration : \"On sait désormais que la fibration DST "
-    "requiert [conditions] — hors de ces conditions, [résultat observé].\"\n"
+    '"Aucune publication identifiée ne couvre [X] dans ces conditions — '
+    'on établit désormais que [Y]."\n'
+    '- Section 4b : règle de fenêtre de fibration : "On sait désormais que la fibration DST '
+    'requiert [conditions] — hors de ces conditions, [résultat observé]."\n'
     "- Section 5 : paramètres et ingrédients non encore testés, suite recommandée.\n"
     "- Section SOURCES : liste run_id + lien SharePoint si disponible.\n"
 )

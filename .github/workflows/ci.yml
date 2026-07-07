@@ -35,13 +35,10 @@ jobs:
       - name: Run tests
         run: pytest -q
 
-  # ── Lint : indicatif (n'échoue jamais la CI, rapport visible) ────────────────
-  # Dette ruff préexistante (~40 E501, imports, etc.) à nettoyer progressivement.
-  # Passer ce job en bloquant une fois la dette résorbée (retirer continue-on-error).
+  # ── Lint : bloquant (dette ruff résorbée le 2026-07-07) ──────────────────────
   lint:
-    name: Lint (ruff) — indicatif
+    name: Lint (ruff)
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

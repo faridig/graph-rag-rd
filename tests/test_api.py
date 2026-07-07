@@ -73,9 +73,7 @@ def test_corpus_sources_have_run_count(client):
 
 
 def test_query_endpoint_returns_fallback(client):
-    fallback = QueryResponse(
-        answer=FALLBACK_MESSAGE, sources=[], found_in_corpus=False
-    )
+    fallback = QueryResponse(answer=FALLBACK_MESSAGE, sources=[], found_in_corpus=False)
     with patch("src.api.run_query", return_value=fallback):
         response = client.post("/query", json={"question": "Pisane ES testé ?"})
     assert response.status_code == 200
@@ -86,7 +84,9 @@ def test_query_endpoint_returns_fallback(client):
 
 
 def test_query_endpoint_returns_answer_with_sources(client):
-    source = Source(run_id="ACE-5:Run:1", experiment_id="ACE-5", source_file="ACE-5_documentation.md", score=0.9)
+    source = Source(
+        run_id="ACE-5:Run:1", experiment_id="ACE-5", source_file="ACE-5_documentation.md", score=0.9
+    )
     found = QueryResponse(
         answer="L'huile améliore la texture [source: ACE-5:Run:1].",
         sources=[source],

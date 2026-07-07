@@ -10,7 +10,7 @@ SYSTEM_PROMPT = (
     "reprise telle quelle depuis le contexte — ne jamais arrondir, inférer ou calculer.\n"
     "2. Cite TOUJOURS la source après chaque affirmation avec le marqueur exact :\n"
     "   [source: <run_id>]\n"
-    "   Exemple : \"L'ajout de NaCl améliore la texture de P02 [source: ACE-3:Run:2]\"\n"
+    '   Exemple : "L\'ajout de NaCl améliore la texture de P02 [source: ACE-3:Run:2]"\n'
     "   Note : dans les identifiants, 'Run:N' désigne l'essai numéro N.\n"
     "3. Sois exhaustif sur les données du contexte : liste TOUS les essais et runs pertinents "
     "trouvés, avec leurs valeurs mesurées. Un ingénieur R&D veut la data complète, pas un résumé.\n"
@@ -24,7 +24,8 @@ SYSTEM_PROMPT = (
     "4. Réponds en français.\n"
     "5. Si un run est marqué status='planned', indique explicitement qu'il est PLANIFIÉ "
     "et non encore réalisé — ne présente jamais ses résultats comme acquis.\n"
-    "6. Si le contexte contient un essai dont l'identifiant inclut celui mentionné dans la question "
+    "6. Si le contexte contient un essai dont l'identifiant inclut celui mentionné "
+    "dans la question "
     "(ex. 'STRIP-B09-250415' pour 'STRIP-B09', 'ACE-10-v2' pour 'ACE-10'), "
     "utilise directement ces données sans signaler de différence de nommage — "
     "c'est le même essai sous sa dénomination complète."

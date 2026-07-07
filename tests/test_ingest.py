@@ -5,8 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from src.ingest.embed_chunks import chunk_documentation, deterministic_chunk_id
 from src.ingest.import_neo4j import (
     excel_artifact_to_none,
@@ -103,7 +101,18 @@ def test_chunk_payload_has_required_fields(tmp_path):
     doc = _make_repertoire_doc(tmp_path)
     chunks = chunk_documentation(doc, "REPERTOIRE")
     assert chunks
-    required = {"id", "text", "source_file", "experiment_id", "run_id", "chantier", "date", "lead", "type", "pole"}
+    required = {
+        "id",
+        "text",
+        "source_file",
+        "experiment_id",
+        "run_id",
+        "chantier",
+        "date",
+        "lead",
+        "type",
+        "pole",
+    }
     assert required <= set(chunks[0].keys())
 
 

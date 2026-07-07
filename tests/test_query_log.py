@@ -75,12 +75,8 @@ def test_compute_metrics_aggregates(logfile: Path) -> None:
     query_log.log_query(
         question="q2", found_in_corpus=True, dense_score=0.70, n_sources=2, n_cited=1
     )
-    query_log.log_query(
-        question="q3", found_in_corpus=False, fallback_reason="absent_experiment"
-    )
-    query_log.log_query(
-        question="q4", found_in_corpus=False, fallback_reason="dense_gate_no_exact"
-    )
+    query_log.log_query(question="q3", found_in_corpus=False, fallback_reason="absent_experiment")
+    query_log.log_query(question="q4", found_in_corpus=False, fallback_reason="dense_gate_no_exact")
     query_log.record_feedback(q1, 1)
 
     m = query_log.compute_metrics(days=7)

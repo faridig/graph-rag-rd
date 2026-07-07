@@ -91,7 +91,6 @@ def _parse_repertoire(path: Path, data: dict) -> dict:
     return {"experiment": experiment, "runs": runs}
 
 
-
 def _parse_experiment_header(path: Path, exp_raw: dict) -> dict[str, Any]:
     exp_id = exp_raw["id"]
     # URL priority: explicit in JSON → download.log → static fallback
@@ -131,11 +130,7 @@ def _parse_runs_with_formulation(data: dict, exp_id: str, formulation_key: str) 
     for raw_run in data.get("runs", []):
         local_id = str(raw_run["id"])
         comp_list = _find_formulation_list(raw_run.get("inputs", {}), formulation_key)
-        raw_ings: list[str] = [
-            item["component"]
-            for item in comp_list
-            if item.get("component")
-        ]
+        raw_ings: list[str] = [item["component"] for item in comp_list if item.get("component")]
         notes = raw_run.get("notes")
         runs.append(
             {
@@ -341,11 +336,17 @@ _DETAILS_OVERRIDES: dict[str, list[str]] = {
     # KEFTA-BOULETTES-LAB
     **{f"KEFTA-{i}": ["KEFTA-BOULETTES-LAB"] for i in range(1, 21)},
     # MDD-EMINCE-THAI-KEBAB  (PIPE25 rows 19, 20, 31–39)
-    **{f"PIPE25-{i}": ["MDD-EMINCE-THAI-KEBAB"] for i in [19, 20, 31, 32, 33, 34, 35, 36, 37, 38, 39]},
+    **{
+        f"PIPE25-{i}": ["MDD-EMINCE-THAI-KEBAB"]
+        for i in [19, 20, 31, 32, 33, 34, 35, 36, 37, 38, 39]
+    },
     # KOBE-1→23
-    "KOBE-1":  ["KOBE-AROMES-GIVAUDAN"],
-    **{f"KOBE-{i}": ["ESSAIS-TVP-HACHE", "TVP-HACHE"] for i in [2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]},
-    "KOBE-9":  ["MORTEAU-ESSAIS-LABO"],
+    "KOBE-1": ["KOBE-AROMES-GIVAUDAN"],
+    **{
+        f"KOBE-{i}": ["ESSAIS-TVP-HACHE", "TVP-HACHE"]
+        for i in [2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]
+    },
+    "KOBE-9": ["MORTEAU-ESSAIS-LABO"],
     "KOBE-23": ["KOBE-2026-AMELIORATIONS"],
 }
 

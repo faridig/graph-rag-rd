@@ -240,8 +240,7 @@ def test_no_data_response_with_citation_false():
     from src.generation.rag_pipeline import _is_no_data_response
 
     assert not _is_no_data_response(
-        "Le SME est 42,96 Wh/kg [source: ACE-3:Run:1]. "
-        "Le run 2 ne figure pas dans le contexte."
+        "Le SME est 42,96 Wh/kg [source: ACE-3:Run:1]. Le run 2 ne figure pas dans le contexte."
     )
 
 
@@ -283,6 +282,7 @@ def test_apply_augmentation_repertoire_not_counted_as_covered():
     couvert et l'augmentation sautait l'expérience.
     """
     from unittest.mock import MagicMock, patch
+
     from src.generation.rag_pipeline import RAGPipeline
 
     # Résultats hybrides : ACE-4 direct + RÉPERTOIRE pointant vers ACE-5
@@ -314,12 +314,15 @@ def test_apply_augmentation_repertoire_not_counted_as_covered():
 
     # Patch HybridNeo4jRetriever + _load_experiment_ids + _load_ingredient_tokens
     # pour éviter la validation pydantic du driver réel
-    with patch("src.generation.rag_pipeline.HybridNeo4jRetriever"), \
-         patch("src.generation.rag_pipeline._load_experiment_ids", return_value=(
-             frozenset({"ACE-4", "ACE-5"}), frozenset({"ACE"}), frozenset()
-         )), \
-         patch("src.generation.rag_pipeline._load_ingredient_tokens", return_value=frozenset()), \
-         patch("src.generation.rag_pipeline._load_absent_topics", return_value=frozenset()):
+    with (
+        patch("src.generation.rag_pipeline.HybridNeo4jRetriever"),
+        patch(
+            "src.generation.rag_pipeline._load_experiment_ids",
+            return_value=(frozenset({"ACE-4", "ACE-5"}), frozenset({"ACE"}), frozenset()),
+        ),
+        patch("src.generation.rag_pipeline._load_ingredient_tokens", return_value=frozenset()),
+        patch("src.generation.rag_pipeline._load_absent_topics", return_value=frozenset()),
+    ):
         pipeline = RAGPipeline(driver_mock, openai_mock, llm_mock)
 
     question = "Comparer ACE-4 et ACE-5 sur la SME"
@@ -337,8 +340,11 @@ def test_apply_augmentation_repertoire_not_counted_as_covered():
 
 # ── Phase 1b — Aggregate ingredient query detection and formatting ─────────────
 
+
 def test_is_aggregate_ingredient_query_detects_patterns():
-    assert _is_aggregate_ingredient_query("Dans quelles expériences a-t-on utilisé du Lorytex Snips ?")
+    assert _is_aggregate_ingredient_query(
+        "Dans quelles expériences a-t-on utilisé du Lorytex Snips ?"
+    )
     assert _is_aggregate_ingredient_query("Quelles expériences ont testé du Plantfer Wheat Shred ?")
     assert _is_aggregate_ingredient_query("Quels essais du corpus ont utilisé du psyllium ?")
     assert _is_aggregate_ingredient_query("dans quelles exp ont utilisé le lupin")
@@ -396,12 +402,16 @@ def test_format_ingredient_aggregate_empty_sample_runs():
 
 
 def test_detect_session_prefixes_finds_kobe():
-    pfxs = _detect_session_prefixes("Dans la session COULEUR-S1, quel run a obtenu le meilleur score ?")
+    pfxs = _detect_session_prefixes(
+        "Dans la session COULEUR-S1, quel run a obtenu le meilleur score ?"
+    )
     assert "COULEUR-S1" in pfxs
 
 
 def test_detect_session_prefixes_strips_run_suffix():
-    pfxs = _detect_session_prefixes("Comparer COULEUR-S1-3 (Malt 0.20%) et COULEUR-S1-4 (Malt 0.25%)")
+    pfxs = _detect_session_prefixes(
+        "Comparer COULEUR-S1-3 (Malt 0.20%) et COULEUR-S1-4 (Malt 0.25%)"
+    )
     assert "COULEUR-S1" in pfxs
     assert len(pfxs) == 1  # deduplicated
 

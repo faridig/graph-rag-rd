@@ -34,11 +34,11 @@ _lock = threading.Lock()
 
 # Raisons de fallback (found_in_corpus=False) — alignées sur les gates du pipeline.
 FALLBACK_REASONS: tuple[str, ...] = (
-    "absent_topic",          # question matche data/absent_topics.txt
-    "dense_gate_no_exact",   # dense_score < seuil ET aucun exact_lookup
-    "absent_experiment",     # essai nommé absent du corpus (ex. ACE-8)
+    "absent_topic",  # question matche data/absent_topics.txt
+    "dense_gate_no_exact",  # dense_score < seuil ET aucun exact_lookup
+    "absent_experiment",  # essai nommé absent du corpus (ex. ACE-8)
     "no_chunks_or_topic_mismatch",  # 0 chunk, ou acronyme de la question absent
-    "llm_declined",          # le LLM a répondu « information absente »
+    "llm_declined",  # le LLM a répondu « information absente »
 )
 
 
@@ -119,6 +119,7 @@ def record_feedback(query_id: str, value: int, comment: str | None = None) -> No
 
 # ── Analyse ──────────────────────────────────────────────────────────────────
 
+
 def _read_records(since: datetime | None = None) -> list[dict[str, Any]]:
     """Lit toutes les lignes JSONL, filtrées par date (ts >= since)."""
     if not _LOG_FILE.exists():
@@ -155,9 +156,7 @@ def compute_metrics(days: int | None = 7) -> dict[str, Any]:
     present = [q for q in queries if q.get("found_in_corpus")]
     fallbacks = [q for q in queries if not q.get("found_in_corpus")]
 
-    reason_counts = Counter(
-        q.get("fallback_reason") or "unspecified" for q in fallbacks
-    )
+    reason_counts = Counter(q.get("fallback_reason") or "unspecified" for q in fallbacks)
 
     dense_present = [
         q["dense_score"] for q in present if isinstance(q.get("dense_score"), (int, float))
@@ -165,15 +164,11 @@ def compute_metrics(days: int | None = 7) -> dict[str, Any]:
     # Couverture citations : sur les réponses trouvées ayant des sources.
     with_sources = [q for q in present if (q.get("n_sources") or 0) > 0]
     cited_cov = [
-        (q.get("n_cited") or 0) / q["n_sources"]
-        for q in with_sources
-        if q.get("n_sources")
+        (q.get("n_cited") or 0) / q["n_sources"] for q in with_sources if q.get("n_sources")
     ]
     uncited = [q for q in with_sources if not (q.get("n_cited") or 0)]
 
-    latencies = [
-        q["latency_ms"] for q in queries if isinstance(q.get("latency_ms"), (int, float))
-    ]
+    latencies = [q["latency_ms"] for q in queries if isinstance(q.get("latency_ms"), (int, float))]
 
     # Feedback : dernière valeur par query_id (l'utilisateur peut changer d'avis).
     fb_by_query: dict[str, int] = {}

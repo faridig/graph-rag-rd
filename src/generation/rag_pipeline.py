@@ -36,14 +36,19 @@ _CITATION_RE = re.compile(r"\[source:\s*([^\]]+)\]", re.IGNORECASE)
 # Ingredient token extraction: words ≥7 alpha chars to avoid common French function words.
 # ≥5 causes false positives: ingredient names like "Beurre De Karité Comme Substitut"
 # inject "comme" into the token set, which then matches any French question.
-_TOKEN_RE = re.compile(r'[A-Za-zÀ-ÿ]{7,}')
+_TOKEN_RE = re.compile(r"[A-Za-zÀ-ÿ]{7,}")
 
 # French common words that appear in some ingredient names but are not product identifiers.
 # Without this guard, a question mentioning "formulations" triggers VEILLE-4 (ingredient named
 # "Note: Deux Formulations De Marinade Testées En Parallèle") as a false positive.
-_INGREDIENT_STOPWORDS = frozenset({
-    'formulations', 'parallèle', 'testées', 'testés',
-})
+_INGREDIENT_STOPWORDS = frozenset(
+    {
+        "formulations",
+        "parallèle",
+        "testées",
+        "testés",
+    }
+)
 
 # Patterns indiquant que le LLM n'a pas trouvé la donnée dans le contexte récupéré.
 # Calibrés sur les 15 réponses AR=0.00 de l'eval v3 (2026-06-07) + DeepSeek (2026-06-08).
@@ -70,23 +75,25 @@ _NO_DATA_PATTERNS: tuple[str, ...] = (
 
 # Two shapes: hyphenated tokens (COULEUR-S1, NPT-DEV-2, 20250403-1) and bare words (Allumette).
 _ID_RE = re.compile(
-    r'\b([0-9A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)+)'  # hyphenated: digit or letter start
-    r'|([A-Za-z][A-Za-z0-9]*)\b'                        # bare word: letter start only
+    r"\b([0-9A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)+)"  # hyphenated: digit or letter start
+    r"|([A-Za-z][A-Za-z0-9]*)\b"  # bare word: letter start only
 )
 
 # Parenthetical acronyms (LME) → topic must appear verbatim in retrieved chunks.
-_TOPIC_ACRONYM_RE = re.compile(r'\(([A-Z]{2,6})\)')
+_TOPIC_ACRONYM_RE = re.compile(r"\(([A-Z]{2,6})\)")
 
 # Fallback seed: used when absent_topics.txt is missing or unreadable.
-_FALLBACK_TOPICS_SEED = frozenset({
-    "méthylcellulose",
-    "methylcellulose",
-    "fermentation lactique",
-})
+_FALLBACK_TOPICS_SEED = frozenset(
+    {
+        "méthylcellulose",
+        "methylcellulose",
+        "fermentation lactique",
+    }
+)
 
 # Experiment ID pattern: all-letter segments separated by hyphens, trailing 1–4 digits.
 # Matches ACE-8, DST-7, PP-REC-12, STRIP-18 — NOT S2-R4, OV-924, COULEUR-S1-3 (digits in prefix).
-_EXP_PATTERN_RE = re.compile(r'\b([A-Z]+(?:-[A-Z]+)*-\d{1,4})\b')
+_EXP_PATTERN_RE = re.compile(r"\b([A-Z]+(?:-[A-Z]+)*-\d{1,4})\b")
 
 _AUGMENT_CYPHER = """
 MATCH (c:Chunk)<-[:HAS_CHUNK]-(r:Run)<-[:HAS_RUN]-(e:Experiment)
@@ -157,7 +164,7 @@ RETURN e.id    AS exp_id,
 LIMIT 6
 """
 
-_INVERSE_REF_RE = re.compile(r'référenc', re.I)
+_INVERSE_REF_RE = re.compile(r"référenc", re.I)
 
 # Phase 2 — Lexical "répertoire" trigger: detect keyword + experiment IDs → direct REPERTOIRE
 # lookup + follow [:DETAILS] to full experiment. Deterministic; does not depend on hybrid results.
@@ -183,7 +190,7 @@ RETURN rep_run.id         AS rep_run_id,
 LIMIT 4
 """
 
-_REPERTOIRE_RE = re.compile(r'r[ée]pertoire', re.I)
+_REPERTOIRE_RE = re.compile(r"r[ée]pertoire", re.I)
 
 # Phase 1 — [:USES_INGREDIENT] traversal: question tokens → Ingredient → Run → Chunk.
 # Limited to 6 candidates (caller takes max 2) to cap token overhead.
@@ -222,7 +229,7 @@ ORDER BY nb_runs DESC
 
 # Regex detecting "which experiments used X" intent.
 _AGGREGATE_INGREDIENT_RE = re.compile(
-    r'quell?es?\s+exp[eé]riences|quels?\s+essais\b|dans\s+quell?es?\s+exp',
+    r"quell?es?\s+exp[eé]riences|quels?\s+essais\b|dans\s+quell?es?\s+exp",
     re.IGNORECASE,
 )
 
@@ -231,9 +238,7 @@ _AGGREGATE_INGREDIENT_RE = re.compile(
 # and fetches ALL run chunks from those sessions, bypassing the top_k cap.
 # Pattern: uppercase letters + optional alphanumeric groups + "-S" + digits,
 # optionally followed by a run-number suffix (-3, -4) that gets stripped to the prefix.
-_SESSION_PREFIX_RE = re.compile(
-    r'\b([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-S\d+)(?:-\d+)?\b'
-)
+_SESSION_PREFIX_RE = re.compile(r"\b([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-S\d+)(?:-\d+)?\b")
 
 _SESSION_CONTEXT_CYPHER = """
 MATCH (e:Experiment)-[:HAS_RUN]->(r:Run)-[:HAS_CHUNK]->(c:Chunk)
@@ -300,8 +305,8 @@ class RAGPipeline:
         self._openai = openai_client
         self._llm = anthropic_client
         self._retriever = HybridNeo4jRetriever(driver, openai_client)
-        self._known_exp_ids, self._known_exp_prefixes, self._empty_exp_ids = (
-            _load_experiment_ids(driver)
+        self._known_exp_ids, self._known_exp_prefixes, self._empty_exp_ids = _load_experiment_ids(
+            driver
         )
         self._absent_topics = _load_absent_topics()
         self._ingredient_tokens = _load_ingredient_tokens(driver)
@@ -313,8 +318,8 @@ class RAGPipeline:
             return
         if time.monotonic() - self._ids_loaded_at < RAG_IDS_CACHE_TTL:
             return
-        self._known_exp_ids, self._known_exp_prefixes, self._empty_exp_ids = (
-            _load_experiment_ids(self._driver)
+        self._known_exp_ids, self._known_exp_prefixes, self._empty_exp_ids = _load_experiment_ids(
+            self._driver
         )
         self._absent_topics = _load_absent_topics()
         self._ingredient_tokens = _load_ingredient_tokens(self._driver)
@@ -324,9 +329,7 @@ class RAGPipeline:
     def _dense_score(self, query_vector: list[float]) -> float:
         """Average cosine similarity of top-3 chunks — more robust than top-1 alone."""
         with self._driver.session() as session:
-            record = session.run(
-                _DENSE_GATE_CYPHER, query_vector=query_vector
-            ).single()
+            record = session.run(_DENSE_GATE_CYPHER, query_vector=query_vector).single()
             return float(record["score"]) if record else 0.0
 
     def _generate(
@@ -352,9 +355,7 @@ class RAGPipeline:
             response.usage.output_tokens,
         )
 
-    def _apply_augmentation(
-        self, chunks: list[dict], question: str, top_k: int
-    ) -> list[dict]:
+    def _apply_augmentation(self, chunks: list[dict], question: str, top_k: int) -> list[dict]:
         # Experiment name patterns: tokens matching known experiment IDs that
         # contain no digits (e.g. "Allumette"). The digit-based rule in
         # _extract_id_patterns ignores them, but they may be the only anchor
@@ -364,8 +365,7 @@ class RAGPipeline:
         # uncovered experiments in a single augmentation Cypher call.
         tokens = {g1 or g2 for g1, g2 in _ID_RE.findall(question)}
         exp_names = [
-            t for t in tokens
-            if t in self._known_exp_ids and not any(c.isdigit() for c in t)
+            t for t in tokens if t in self._known_exp_ids and not any(c.isdigit() for c in t)
         ]
 
         # Skip augmentation for digit-based patterns already satisfied by hybrid.
@@ -379,8 +379,7 @@ class RAGPipeline:
         # is the referenced experiment ID (e.g. "ACE-5"), which would falsely mark
         # that experiment as already covered when it is not.
         non_rep_chunks = [
-            c for c in chunks
-            if c.get("experiment_id", "") != "REPERTOIRE-RD-2025-2026"
+            c for c in chunks if c.get("experiment_id", "") != "REPERTOIRE-RD-2025-2026"
         ]
         hybrid_run_suffixes = {
             c.get("run_id", "").lower().rsplit(":", 1)[-1] for c in non_rep_chunks
@@ -388,7 +387,8 @@ class RAGPipeline:
         hybrid_exp_ids_lower = {c.get("experiment_id", "").lower() for c in non_rep_chunks}
         digit_patterns = [p for p in _extract_id_patterns(question) if len(p) >= 4]
         uncovered = [
-            p for p in digit_patterns
+            p
+            for p in digit_patterns
             if p.lower() not in hybrid_run_suffixes
             and not any(p.lower() in eid for eid in hybrid_exp_ids_lower)
         ]
@@ -400,7 +400,8 @@ class RAGPipeline:
         # n uncovered experiments, allocate at most 2 slots per experiment.
         n_aug = max(2, 2 * len(uncovered)) if uncovered else 6
         extra = _augment_chunks_from_question(
-            self._driver, question,
+            self._driver,
+            question,
             extra_patterns=exp_names or None,
             patterns_override=uncovered if digit_patterns else None,
             max_extra=n_aug,
@@ -436,9 +437,7 @@ class RAGPipeline:
 
         return _CITATION_RE.sub(_keep_or_drop, answer).strip()
 
-    def _fallback(
-        self, reason: str, dense_score: float | None = None
-    ) -> QueryResponse:
+    def _fallback(self, reason: str, dense_score: float | None = None) -> QueryResponse:
         """FALLBACK_MESSAGE annoté de la gate déclenchée (monitoring — query_log)."""
         return QueryResponse(
             answer=FALLBACK_MESSAGE,
@@ -526,13 +525,18 @@ class RAGPipeline:
             # AI/SME/TPA/anisotropie in question and no section-4 in hybrid results.
             _ql = question.lower()
             if any(t in _ql for t in _MEASURE_TERMS) or _MEASURE_TERMS_SHORT_RE.search(_ql):
-                _meas_exp_ids = list({
-                    c["experiment_id"] for c in chunks
-                    if c.get("experiment_id") and c["experiment_id"] != "REPERTOIRE-RD-2025-2026"
-                })
+                _meas_exp_ids = list(
+                    {
+                        c["experiment_id"]
+                        for c in chunks
+                        if c.get("experiment_id")
+                        and c["experiment_id"] != "REPERTOIRE-RD-2025-2026"
+                    }
+                )
                 if _meas_exp_ids and not any("## 4" in (c.get("text") or "") for c in chunks):
                     _meas = _fetch_measure_sections(
-                        self._driver, _meas_exp_ids,
+                        self._driver,
+                        _meas_exp_ids,
                         [c["run_id"] for c in chunks if c.get("run_id")],
                     )
                     if _meas:
@@ -540,7 +544,8 @@ class RAGPipeline:
 
             exp_ids = list({c["experiment_id"] for c in chunks if c.get("experiment_id")})
             ref_summaries = [
-                r for r in _fetch_reference_summaries(self._driver, exp_ids)
+                r
+                for r in _fetch_reference_summaries(self._driver, exp_ids)
                 if r["ref_exp_id"] not in exp_ids
             ]
 
@@ -558,8 +563,7 @@ class RAGPipeline:
             # Phase 2 — Lexical "répertoire" trigger (deterministic, replaces passive approach)
             if _REPERTOIRE_RE.search(question):
                 exp_ids_in_q = [
-                    p for p in _EXP_PATTERN_RE.findall(question)
-                    if p in self._known_exp_ids
+                    p for p in _EXP_PATTERN_RE.findall(question) if p in self._known_exp_ids
                 ]
                 if exp_ids_in_q:
                     rep_ctx = _fetch_repertoire_direct(self._driver, exp_ids_in_q)
@@ -575,10 +579,20 @@ class RAGPipeline:
                         new_items: list[dict] = []
                         for r in rep_ctx:
                             if r.get("run_id") and r["run_id"] not in existing_run_ids | seen_new:
-                                new_items.append({"run_id": r["run_id"], "experiment_id": r.get("exp_id", "")})
+                                new_items.append(
+                                    {"run_id": r["run_id"], "experiment_id": r.get("exp_id", "")}
+                                )
                                 seen_new.add(r["run_id"])
-                            if r.get("rep_run_id") and r["rep_run_id"] not in existing_run_ids | seen_new:
-                                new_items.append({"run_id": r["rep_run_id"], "experiment_id": "REPERTOIRE-RD-2025-2026"})
+                            if (
+                                r.get("rep_run_id")
+                                and r["rep_run_id"] not in existing_run_ids | seen_new
+                            ):
+                                new_items.append(
+                                    {
+                                        "run_id": r["rep_run_id"],
+                                        "experiment_id": "REPERTOIRE-RD-2025-2026",
+                                    }
+                                )
                                 seen_new.add(r["rep_run_id"])
                         if new_items:
                             sources += _build_sources(new_items, self._driver, is_exact=True)
@@ -598,15 +612,16 @@ class RAGPipeline:
                         agg_source_items = [
                             {"run_id": r["sample_run_ids"][0], "experiment_id": r["experiment_id"]}
                             for r in agg_rows
-                            if r["sample_run_ids"] and r["sample_run_ids"][0] not in existing_run_ids
+                            if r["sample_run_ids"]
+                            and r["sample_run_ids"][0] not in existing_run_ids
                         ]
                         if agg_source_items:
                             sources += _build_sources(agg_source_items, self._driver, is_exact=True)
 
                 # Phase 1a — per-run chunks (MAX 2 slots, appended last)
-                ing_chunks = _fetch_ingredient_context(
-                    self._driver, ing_tokens, list(valid_ids)
-                )[:2]
+                ing_chunks = _fetch_ingredient_context(self._driver, ing_tokens, list(valid_ids))[
+                    :2
+                ]
                 if ing_chunks:
                     context += (
                         "\n\n=== Essais utilisant les ingrédients mentionnés ===\n"
@@ -616,7 +631,8 @@ class RAGPipeline:
                     existing_run_ids = {s.run_id for s in sources}
                     sources += _build_sources(
                         [c for c in ing_chunks if c["run_id"] not in existing_run_ids],
-                        self._driver, is_exact=True,
+                        self._driver,
+                        is_exact=True,
                     )
 
             # Phase 1.5 — Session-level context (KOBE-style multi-run session questions).
@@ -635,8 +651,13 @@ class RAGPipeline:
                     valid_ids |= {c["run_id"] for c in fresh if c.get("run_id")}
                     existing_run_ids = {s.run_id for s in sources}
                     sources += _build_sources(
-                        [c for c in fresh if c.get("run_id") and c["run_id"] not in existing_run_ids],
-                        self._driver, is_exact=True,
+                        [
+                            c
+                            for c in fresh
+                            if c.get("run_id") and c["run_id"] not in existing_run_ids
+                        ],
+                        self._driver,
+                        is_exact=True,
                     )
 
         # ── Generation ────────────────────────────────────────────────────────
@@ -744,13 +765,18 @@ class RAGPipeline:
             # Measure-term augmentation (same logic as run())
             _ql = question.lower()
             if any(t in _ql for t in _MEASURE_TERMS) or _MEASURE_TERMS_SHORT_RE.search(_ql):
-                _meas_exp_ids = list({
-                    c["experiment_id"] for c in chunks
-                    if c.get("experiment_id") and c["experiment_id"] != "REPERTOIRE-RD-2025-2026"
-                })
+                _meas_exp_ids = list(
+                    {
+                        c["experiment_id"]
+                        for c in chunks
+                        if c.get("experiment_id")
+                        and c["experiment_id"] != "REPERTOIRE-RD-2025-2026"
+                    }
+                )
                 if _meas_exp_ids and not any("## 4" in (c.get("text") or "") for c in chunks):
                     _meas = _fetch_measure_sections(
-                        self._driver, _meas_exp_ids,
+                        self._driver,
+                        _meas_exp_ids,
                         [c["run_id"] for c in chunks if c.get("run_id")],
                     )
                     if _meas:
@@ -758,7 +784,8 @@ class RAGPipeline:
 
             exp_ids = list({c["experiment_id"] for c in chunks if c.get("experiment_id")})
             ref_summaries = [
-                r for r in _fetch_reference_summaries(self._driver, exp_ids)
+                r
+                for r in _fetch_reference_summaries(self._driver, exp_ids)
                 if r["ref_exp_id"] not in exp_ids
             ]
             context = _format_hybrid_context(chunks)
@@ -774,8 +801,7 @@ class RAGPipeline:
             # Phase 2 — Lexical "répertoire" trigger (deterministic)
             if _REPERTOIRE_RE.search(question):
                 exp_ids_in_q = [
-                    p for p in _EXP_PATTERN_RE.findall(question)
-                    if p in self._known_exp_ids
+                    p for p in _EXP_PATTERN_RE.findall(question) if p in self._known_exp_ids
                 ]
                 if exp_ids_in_q:
                     rep_ctx = _fetch_repertoire_direct(self._driver, exp_ids_in_q)
@@ -791,10 +817,20 @@ class RAGPipeline:
                         new_items_s: list[dict] = []
                         for r in rep_ctx:
                             if r.get("run_id") and r["run_id"] not in existing_run_ids | seen_new_s:
-                                new_items_s.append({"run_id": r["run_id"], "experiment_id": r.get("exp_id", "")})
+                                new_items_s.append(
+                                    {"run_id": r["run_id"], "experiment_id": r.get("exp_id", "")}
+                                )
                                 seen_new_s.add(r["run_id"])
-                            if r.get("rep_run_id") and r["rep_run_id"] not in existing_run_ids | seen_new_s:
-                                new_items_s.append({"run_id": r["rep_run_id"], "experiment_id": "REPERTOIRE-RD-2025-2026"})
+                            if (
+                                r.get("rep_run_id")
+                                and r["rep_run_id"] not in existing_run_ids | seen_new_s
+                            ):
+                                new_items_s.append(
+                                    {
+                                        "run_id": r["rep_run_id"],
+                                        "experiment_id": "REPERTOIRE-RD-2025-2026",
+                                    }
+                                )
                                 seen_new_s.add(r["rep_run_id"])
                         if new_items_s:
                             sources += _build_sources(new_items_s, self._driver, is_exact=True)
@@ -814,15 +850,16 @@ class RAGPipeline:
                         agg_source_items = [
                             {"run_id": r["sample_run_ids"][0], "experiment_id": r["experiment_id"]}
                             for r in agg_rows
-                            if r["sample_run_ids"] and r["sample_run_ids"][0] not in existing_run_ids
+                            if r["sample_run_ids"]
+                            and r["sample_run_ids"][0] not in existing_run_ids
                         ]
                         if agg_source_items:
                             sources += _build_sources(agg_source_items, self._driver, is_exact=True)
 
                 # Phase 1a — per-run chunks (MAX 2 slots, appended last)
-                ing_chunks = _fetch_ingredient_context(
-                    self._driver, ing_tokens, list(valid_ids)
-                )[:2]
+                ing_chunks = _fetch_ingredient_context(self._driver, ing_tokens, list(valid_ids))[
+                    :2
+                ]
                 if ing_chunks:
                     context += (
                         "\n\n=== Essais utilisant les ingrédients mentionnés ===\n"
@@ -832,7 +869,8 @@ class RAGPipeline:
                     existing_run_ids = {s.run_id for s in sources}
                     sources += _build_sources(
                         [c for c in ing_chunks if c["run_id"] not in existing_run_ids],
-                        self._driver, is_exact=True,
+                        self._driver,
+                        is_exact=True,
                     )
 
             # Phase 1.5 — Session-level context (mirror of run())
@@ -849,8 +887,13 @@ class RAGPipeline:
                     valid_ids |= {c["run_id"] for c in fresh if c.get("run_id")}
                     existing_run_ids = {s.run_id for s in sources}
                     sources += _build_sources(
-                        [c for c in fresh if c.get("run_id") and c["run_id"] not in existing_run_ids],
-                        self._driver, is_exact=True,
+                        [
+                            c
+                            for c in fresh
+                            if c.get("run_id") and c["run_id"] not in existing_run_ids
+                        ],
+                        self._driver,
+                        is_exact=True,
                     )
 
         text_chunks: list[str] = []
@@ -963,7 +1006,6 @@ def _fetch_repertoire_direct(driver: Driver, exp_ids: list[str]) -> list[dict]:
 def _format_repertoire_context(rep_ctx: list[dict]) -> str:
     parts = []
     for r in rep_ctx:
-        run_id = r.get("run_id") or r.get("rep_run_id", "")
         header = f"[Source: {r['rep_run_id']}] [Répertoire → {r.get('exp_id', '')}]"
         if r.get("exp_title"):
             header += f" — {r['exp_title']}"
@@ -1076,9 +1118,7 @@ def _load_absent_topics(path: str = ABSENT_TOPICS_PATH) -> frozenset[str]:
     try:
         with open(path, encoding="utf-8") as fh:
             topics = frozenset(
-                line.strip().lower()
-                for line in fh
-                if line.strip() and not line.startswith("#")
+                line.strip().lower() for line in fh if line.strip() and not line.startswith("#")
             )
         _log.debug("Loaded %d absent topics from %s", len(topics), path)
         return topics or _FALLBACK_TOPICS_SEED
@@ -1102,8 +1142,7 @@ def _load_experiment_ids(
     try:
         with driver.session() as session:
             rows = session.run(
-                "MATCH (e:Experiment) WHERE e.id <> 'REPERTOIRE-RD-2025-2026' "
-                "RETURN e.id AS eid"
+                "MATCH (e:Experiment) WHERE e.id <> 'REPERTOIRE-RD-2025-2026' RETURN e.id AS eid"
             ).data()
             empty_rows = session.run(
                 "MATCH (e:Experiment) "
@@ -1114,13 +1153,9 @@ def _load_experiment_ids(
             ).data()
         ids: frozenset[str] = frozenset(r["eid"] for r in rows if r.get("eid"))
         prefixes: frozenset[str] = frozenset(
-            "-".join(eid.split("-")[:-1])
-            for eid in ids
-            if eid.split("-")[-1].isdigit()
+            "-".join(eid.split("-")[:-1]) for eid in ids if eid.split("-")[-1].isdigit()
         )
-        empty_ids: frozenset[str] = frozenset(
-            r["eid"] for r in empty_rows if r.get("eid")
-        )
+        empty_ids: frozenset[str] = frozenset(r["eid"] for r in empty_rows if r.get("eid"))
         return ids, prefixes, empty_ids
     except Exception as exc:
         _log.debug("Could not load experiment IDs at startup: %s", exc)
@@ -1181,7 +1216,9 @@ def _augment_chunks_from_question(
 ) -> list[dict]:
     # patterns_override replaces the internal _extract_id_patterns call so that
     # _apply_augmentation can restrict the search to uncovered patterns only.
-    patterns = list(patterns_override) if patterns_override is not None else _extract_id_patterns(question)
+    patterns = (
+        list(patterns_override) if patterns_override is not None else _extract_id_patterns(question)
+    )
     if extra_patterns:
         seen = {p.lower() for p in patterns}
         for p in extra_patterns:
@@ -1318,7 +1355,7 @@ def _is_valid_ingredient_name(name: str) -> bool:
     '/' separates two alternatives, 'Note:' prefixes a free-text remark.
     These produce noise in the aggregate and should be excluded.
     """
-    return '/' not in name and not name.lower().startswith('note')
+    return "/" not in name and not name.lower().startswith("note")
 
 
 def _fetch_ingredient_aggregate(driver: Driver, tokens: list[str]) -> list[dict]:
@@ -1430,14 +1467,16 @@ def _build_sources(items: list[dict], driver: Driver, is_exact: bool) -> list[So
             or get_sharepoint_url_for_run(run_id)
             or get_sharepoint_url(exp_id)
         )
-        sources.append(Source(
-            run_id=run_id,
-            experiment_id=exp_id,
-            source_file=f"{exp_id}_documentation.md" if exp_id else "",
-            score=0.0 if is_exact else float(item.get("score") or 0.0),
-            name=item.get("run_name") or "",
-            sharepoint_url=url,
-        ))
+        sources.append(
+            Source(
+                run_id=run_id,
+                experiment_id=exp_id,
+                source_file=f"{exp_id}_documentation.md" if exp_id else "",
+                score=0.0 if is_exact else float(item.get("score") or 0.0),
+                name=item.get("run_name") or "",
+                sharepoint_url=url,
+            )
+        )
     return sources
 
 
@@ -1451,7 +1490,11 @@ def _format_history_messages(history: list[dict]) -> list[dict]:
     for msg in recent:
         role = msg.get("role", "")
         raw = msg.get("content") or ""
-        content = raw if isinstance(raw, str) else " ".join(p if isinstance(p, str) else (p.get("text") or "") for p in raw)
+        content = (
+            raw
+            if isinstance(raw, str)
+            else " ".join(p if isinstance(p, str) else (p.get("text") or "") for p in raw)
+        )
         content = content.strip()
         if role == "assistant":
             idx = content.find("\n\n---\n**Sources**")

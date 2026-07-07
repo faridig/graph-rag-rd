@@ -61,6 +61,7 @@ async def _revalidate_custom_css(request, call_next):
 # ── SSO Authentik (header-trust) ──────────────────────────────────────────────
 # SSO_ENABLED=false en sandbox — l'infra nxtdeploy le passe à true en prod.
 if SSO_ENABLED:
+
     @cl.header_auth_callback
     def header_auth_callback(headers: dict) -> cl.User | None:
         email = (headers.get("x-authentik-email") or "").lower().strip()
@@ -72,6 +73,8 @@ if SSO_ENABLED:
             display_name=name,
             metadata={"provider": "authentik"},
         )
+
+
 _RUN_ID_RE = re.compile(r"\[source:\s*([^\]]+)\]")
 _CIR_RE = re.compile(r"\bcir\b", re.IGNORECASE)
 # Questions informatives → RAG, pas générateur
@@ -89,6 +92,7 @@ _CIR_LABELS = ["Muscles HME", "Produits élaborés", "Nouvelles voies DST"]
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _format_run_id(run_id: str) -> str:
     parts = run_id.split(":Run:", 1)
     if len(parts) == 2:
@@ -102,9 +106,7 @@ def _format_run_id(run_id: str) -> str:
 
 
 def _humanize_citations(text: str) -> str:
-    return _RUN_ID_RE.sub(
-        lambda m: f"[source: {_format_run_id(m.group(1).strip())}]", text
-    )
+    return _RUN_ID_RE.sub(lambda m: f"[source: {_format_run_id(m.group(1).strip())}]", text)
 
 
 def _build_sources_md(sources: list[Source]) -> str:
@@ -142,6 +144,7 @@ def _history_from_session() -> list[dict]:
 
 # ── Starters (examples) ───────────────────────────────────────────────────────
 
+
 @cl.set_starters
 async def set_starters() -> list[cl.Starter]:
     return [
@@ -170,9 +173,15 @@ async def set_starters() -> list[cl.Starter]:
 
 # ── CIR flow ──────────────────────────────────────────────────────────────────
 
+
 async def _show_cir_groupement_picker() -> None:
     actions = [
-        cl.Action(name="cir_groupement", value=GROUPEMENTS_VALIDES[i], label=_CIR_LABELS[i], payload={"groupement": GROUPEMENTS_VALIDES[i]})
+        cl.Action(
+            name="cir_groupement",
+            value=GROUPEMENTS_VALIDES[i],
+            label=_CIR_LABELS[i],
+            payload={"groupement": GROUPEMENTS_VALIDES[i]},
+        )
         for i in range(len(GROUPEMENTS_VALIDES))
     ]
     await cl.Message(
@@ -239,7 +248,9 @@ async def _run_cir_generation(groupement: str, cir_year: int | None = None) -> N
                 fetch_literature, groupement, 8, start_year
             )
             n = literature_context.count("\n- ") if literature_context else 0
-            lit_step.output = f"{n} article(s) trouvé(s)" if n else "Aucun article (API indisponible)"
+            lit_step.output = (
+                f"{n} article(s) trouvé(s)" if n else "Aucun article (API indisponible)"
+            )
         except Exception:
             _log.warning("fetch_literature failed, proceeding without", exc_info=True)
             lit_step.output = "Indisponible — génération sans références externes"
@@ -289,6 +300,7 @@ async def _run_cir_generation(groupement: str, cir_year: int | None = None) -> N
         )
 
     import tempfile as _tmp
+
     with _tmp.NamedTemporaryFile(suffix=".docx", delete=False) as f:
         tmp_path = f.name
 
@@ -300,12 +312,14 @@ async def _run_cir_generation(groupement: str, cir_year: int | None = None) -> N
     cl.user_session.set("tmp_files", tmp_files)
 
     safe_name = groupement.replace(" ", "_")[:40]
-    elements = [cl.File(
-        name=f"fiche_CIR_{safe_name}.docx",
-        path=tmp_path,
-        display="side",
-        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    )]
+    elements = [
+        cl.File(
+            name=f"fiche_CIR_{safe_name}.docx",
+            path=tmp_path,
+            display="side",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+    ]
 
     # Avertissement qualité + lien téléchargement dans un seul message
     warning_prefix = (
@@ -320,6 +334,7 @@ async def _run_cir_generation(groupement: str, cir_year: int | None = None) -> N
 
 
 # ── Session init ──────────────────────────────────────────────────────────────
+
 
 @cl.on_chat_start
 async def on_chat_start() -> None:
@@ -362,12 +377,13 @@ async def on_settings_update(settings: dict) -> None:
 
 @cl.on_chat_end
 async def on_chat_end() -> None:
-    for path in (cl.user_session.get("tmp_files") or []):
+    for path in cl.user_session.get("tmp_files") or []:
         with contextlib.suppress(OSError):
             os.unlink(path)
 
 
 # ── Main message handler ──────────────────────────────────────────────────────
+
 
 def _is_cir_generation_request(text: str) -> bool:
     """True si le message est une commande de génération CIR, pas une question informative."""
@@ -461,10 +477,9 @@ async def on_message(message: cl.Message) -> None:
 
     cited_ids = extract_cited_ids(final_response.answer)
     if final_response.found_in_corpus and final_response.sources:
-        display_sources = (
-            [s for s in final_response.sources if s.run_id in cited_ids]
-            or final_response.sources
-        )
+        display_sources = [
+            s for s in final_response.sources if s.run_id in cited_ids
+        ] or final_response.sources
         sources_md = _build_sources_md(display_sources)
         # Append sources as a stream token — msg.update() alone doesn't
         # re-render already-streamed content in Chainlit 2.x.
@@ -525,6 +540,4 @@ async def on_rag_feedback(action: cl.Action) -> None:
         await asyncio.to_thread(record_feedback, query_id, value)
     await action.remove()
     with contextlib.suppress(Exception):
-        await cl.context.emitter.send_toast(
-            "Merci pour votre retour !", type="success"
-        )
+        await cl.context.emitter.send_toast("Merci pour votre retour !", type="success")
